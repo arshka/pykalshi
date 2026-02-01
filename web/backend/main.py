@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -14,7 +15,7 @@ sys.path.append(os.getcwd())
 
 from kalshi_api.client import KalshiClient
 from kalshi_api.models import MarketModel, OrderbookResponse, BalanceModel, EventModel
-from kalshi_api.enums import MarketStatus
+from kalshi_api.enums import MarketStatus, CandlestickPeriod
 from kalshi_api.exceptions import KalshiAPIError
 
 load_dotenv()
@@ -195,3 +196,46 @@ def list_event_markets(event_ticker: str):
         return [m.data for m in markets]
     except KalshiAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
+
+@app.get("/api/markets/{ticker}/candlesticks")
+def get_market_history(ticker: str, period: str = "hour", limit: int = 168):
+    c = get_client()
+    try:
+        # Resolve Market object first (needed for series_ticker inside get_candlesticks)
+        market = c.get_market(ticker)
+        
+        # Determine time range (default to 1 week for hourly)
+        end_ts = int(time.time())
+        start_ts = end_ts - (limit * 3600) # Simple fallback if hourly
+        
+        # Map string period to Enum
+        period_enum = CandlestickPeriod.ONE_HOUR
+        if period == "day":
+            period_enum = CandlestickPeriod.ONE_DAY
+            start_ts = end_ts - (limit * 86400)
+        elif period == "minute":
+            period_enum = CandlestickPeriod.ONE_MINUTE
+            start_ts = end_ts - (limit * 60)
+            
+        history = market.get_candlesticks(start_ts, end_ts, period_enum)
+        
+        # Flatten for frontend: [{ts, price}, ...]
+        # We use 'price.mean' or 'close'
+        data = []
+        for candle in history.candlesticks:
+             if candle.price and candle.price.mean:
+                 data.append({
+                     "ts": candle.end_period_ts,
+                     "price": candle.price.mean,
+                     "yes_ask": candle.yes_ask.close if candle.yes_ask else None,
+                     "yes_bid": candle.yes_bid.close if candle.yes_bid else None,
+                     "volume": candle.volume
+                 })
+        
+        return data
+
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except Exception as e:
+        print(f"Error fetching history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
