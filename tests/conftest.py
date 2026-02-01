@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
 from kalshi_api import KalshiClient
-from kalshi_api.models import BalanceModel, OrderModel
 
 
 @pytest.fixture

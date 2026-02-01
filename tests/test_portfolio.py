@@ -35,8 +35,7 @@ def test_get_positions_workflow(client, mock_response, mocker):
         ),
     )
 
-    user = client.get_user()
-    positions = user.get_positions()
+    positions = client.portfolio.get_positions()
 
     # Verify results
     assert len(positions) == 2
@@ -48,6 +47,7 @@ def test_get_positions_workflow(client, mock_response, mocker):
     mock_get.assert_called_with(
         "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/positions?limit=100",
         headers=mocker.ANY,
+        timeout=mocker.ANY,
     )
 
 
@@ -58,8 +58,7 @@ def test_get_positions_with_filters(client, mock_response, mocker):
         return_value=mock_response({"market_positions": [], "cursor": ""}),
     )
 
-    user = client.get_user()
-    user.get_positions(
+    client.portfolio.get_positions(
         ticker="KXTEST-A", event_ticker="KXTEST", count_filter="position", limit=50
     )
 
@@ -108,8 +107,7 @@ def test_get_fills_workflow(client, mock_response, mocker):
         ),
     )
 
-    user = client.get_user()
-    fills = user.get_fills()
+    fills = client.portfolio.get_fills()
 
     # Verify results
     assert len(fills) == 2
@@ -126,6 +124,7 @@ def test_get_fills_workflow(client, mock_response, mocker):
     mock_get.assert_called_with(
         "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/fills?limit=100",
         headers=mocker.ANY,
+        timeout=mocker.ANY,
     )
 
 
@@ -135,8 +134,7 @@ def test_get_fills_with_filters(client, mock_response, mocker):
         "requests.get", return_value=mock_response({"fills": [], "cursor": ""})
     )
 
-    user = client.get_user()
-    user.get_fills(
+    client.portfolio.get_fills(
         ticker="KXTEST",
         order_id="order-123",
         min_ts=1700000000,
@@ -173,10 +171,9 @@ def test_get_order_by_id(client, mock_response, mocker):
         ),
     )
 
-    user = client.get_user()
-    order = user.get_order("order-abc-123")
+    order = client.portfolio.get_order("order-abc-123")
 
-    # Verify order data
+    # Verify order data (delegated through __getattr__)
     assert order.order_id == "order-abc-123"
     assert order.ticker == "KXTEST"
     assert order.status == OrderStatus.RESTING
@@ -185,6 +182,7 @@ def test_get_order_by_id(client, mock_response, mocker):
     mock_get.assert_called_with(
         "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/orders/order-abc-123",
         headers=mocker.ANY,
+        timeout=mocker.ANY,
     )
 
 
@@ -192,14 +190,12 @@ def test_get_order_not_found(client, mock_response, mocker):
     """Test that 404 raises ResourceNotFoundError."""
     from kalshi_api.exceptions import ResourceNotFoundError
 
-    mock_get = mocker.patch(
+    mocker.patch(
         "requests.get",
         return_value=mock_response(
             {"message": "Order not found", "code": "not_found"}, status_code=404
         ),
     )
 
-    user = client.get_user()
-
     with pytest.raises(ResourceNotFoundError):
-        user.get_order("nonexistent-order")
+        client.portfolio.get_order("nonexistent-order")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from .orders import Order
-from .enums import Action, Side, OrderType
+from .enums import Action, Side, OrderType, OrderStatus
 from .models import OrderModel, BalanceModel, PositionModel, FillModel
 
 if TYPE_CHECKING:
@@ -9,71 +9,95 @@ if TYPE_CHECKING:
     from .markets import Market
 
 
-class User:
-    """
-    Represents the authenticated Kalshi user/account.
-    """
+class Portfolio:
+    """Authenticated user's portfolio and trading operations."""
 
     def __init__(self, client: KalshiClient) -> None:
         self.client = client
 
     @property
     def balance(self) -> BalanceModel:
-        """
-        Get portfolio balance.
-        Returns BalanceModel with 'balance' and 'portfolio_value' in cents.
-        """
+        """Get portfolio balance. Values are in cents."""
         data = self.client.get("/portfolio/balance")
         return BalanceModel.model_validate(data)
 
     def place_order(
         self,
-        market: Market,
+        ticker: str | Market,
         action: Action,
         side: Side,
         count: int,
-        price: int,
         order_type: OrderType = OrderType.LIMIT,
+        *,
+        yes_price: int | None = None,
+        no_price: int | None = None,
     ) -> Order:
+        """Place an order on a market.
+
+        Args:
+            ticker: Market ticker string or Market object.
+            action: BUY or SELL.
+            side: YES or NO.
+            count: Number of contracts.
+            order_type: LIMIT or MARKET.
+            yes_price: Price in cents (1-99) for the YES side.
+            no_price: Price in cents (1-99) for the NO side.
+                      Converted to yes_price internally (yes_price = 100 - no_price).
+                      Provide exactly one of yes_price or no_price for limit orders.
         """
-        Place an order on a specific market.
-        """
-        order_data = {
-            "ticker": market.ticker,
+        if yes_price is not None and no_price is not None:
+            raise ValueError("Specify yes_price or no_price, not both")
+        if yes_price is None and no_price is None and order_type == OrderType.LIMIT:
+            raise ValueError("Limit orders require yes_price or no_price")
+
+        if no_price is not None:
+            yes_price = 100 - no_price
+
+        ticker_str = ticker if isinstance(ticker, str) else ticker.ticker
+
+        order_data: dict = {
+            "ticker": ticker_str,
             "action": action.value,
             "side": side.value,
             "count": count,
             "type": order_type.value,
-            "yes_price": price,
         }
+        if yes_price is not None:
+            order_data["yes_price"] = yes_price
+
         response = self.client.post("/portfolio/orders", order_data)
         data = response.get("order", response)
-        # Validate logic
         model = OrderModel.model_validate(data)
         return Order(self.client, model)
 
-    def get_orders(self, status: str | None = None) -> list[Order]:
-        """
-        Get list of orders.
-        """
-        endpoint = "/portfolio/orders"
-        if status:
-            endpoint += f"?status={status}"
-        response = self.client.get(endpoint)
-        orders_data = response.get("orders", [])
-        # Validate data
-        return [Order(self.client, OrderModel.model_validate(d)) for d in orders_data]
-
-    def get_order(self, order_id: str) -> Order:
-        """
-        Get a single order by ID.
+    def get_orders(
+        self,
+        status: OrderStatus | None = None,
+        ticker: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+        fetch_all: bool = False,
+    ) -> list[Order]:
+        """Get list of orders.
 
         Args:
-            order_id: The unique order identifier.
-
-        Returns:
-            Order object for the specified order.
+            status: Filter by order status.
+            ticker: Filter by market ticker.
+            limit: Maximum results per page (default 100).
+            cursor: Pagination cursor for fetching next page.
+            fetch_all: If True, automatically fetch all pages.
         """
+        params = {
+            "limit": limit,
+            "status": status.value if status is not None else None,
+            "ticker": ticker,
+            "cursor": cursor,
+        }
+        data = self.client.paginated_get("/portfolio/orders", "orders", params, fetch_all)
+        return [Order(self.client, OrderModel.model_validate(d)) for d in data]
+
+    def get_order(self, order_id: str) -> Order:
+        """Get a single order by ID."""
         response = self.client.get(f"/portfolio/orders/{order_id}")
         data = response.get("order", response)
         model = OrderModel.model_validate(data)
@@ -88,80 +112,26 @@ class User:
         cursor: str | None = None,
         fetch_all: bool = False,
     ) -> list[PositionModel]:
-        """
-        Get portfolio positions.
+        """Get portfolio positions.
 
         Args:
             ticker: Filter by specific market ticker.
             event_ticker: Filter by event ticker.
             count_filter: Filter positions with non-zero values.
                          Options: "position", "total_traded", or both comma-separated.
-            limit: Maximum number of positions per page (default 100, max 1000).
+            limit: Maximum positions per page (default 100, max 1000).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
-
-        Returns:
-            List of PositionModel objects representing portfolio holdings.
         """
-        all_positions: list[PositionModel] = []
-        current_cursor = cursor
-
-        while True:
-            params = [f"limit={limit}"]
-            if ticker:
-                params.append(f"ticker={ticker}")
-            if event_ticker:
-                params.append(f"event_ticker={event_ticker}")
-            if count_filter:
-                params.append(f"count_filter={count_filter}")
-            if current_cursor:
-                params.append(f"cursor={current_cursor}")
-
-            endpoint = f"/portfolio/positions?{'&'.join(params)}"
-            response = self.client.get(endpoint)
-            positions_data = response.get("market_positions", [])
-
-            positions = [PositionModel.model_validate(p) for p in positions_data]
-            all_positions.extend(positions)
-
-            next_cursor = response.get("cursor", "")
-            if not fetch_all or not next_cursor:
-                break
-            current_cursor = next_cursor
-
-        return all_positions
-
-    def get_positions_paginated(
-        self,
-        ticker: str | None = None,
-        event_ticker: str | None = None,
-        count_filter: str | None = None,
-        limit: int = 100,
-        cursor: str | None = None,
-    ) -> tuple[list[PositionModel], str]:
-        """
-        Get portfolio positions with pagination info.
-
-        Returns:
-            Tuple of (list of PositionModel, next cursor string).
-        """
-        params = [f"limit={limit}"]
-        if ticker:
-            params.append(f"ticker={ticker}")
-        if event_ticker:
-            params.append(f"event_ticker={event_ticker}")
-        if count_filter:
-            params.append(f"count_filter={count_filter}")
-        if cursor:
-            params.append(f"cursor={cursor}")
-
-        endpoint = f"/portfolio/positions?{'&'.join(params)}"
-        response = self.client.get(endpoint)
-        positions_data = response.get("market_positions", [])
-        next_cursor = response.get("cursor", "")
-
-        positions = [PositionModel.model_validate(p) for p in positions_data]
-        return positions, next_cursor
+        params = {
+            "limit": limit,
+            "ticker": ticker,
+            "event_ticker": event_ticker,
+            "count_filter": count_filter,
+            "cursor": cursor,
+        }
+        data = self.client.paginated_get("/portfolio/positions", "market_positions", params, fetch_all)
+        return [PositionModel.model_validate(p) for p in data]
 
     def get_fills(
         self,
@@ -173,83 +143,24 @@ class User:
         cursor: str | None = None,
         fetch_all: bool = False,
     ) -> list[FillModel]:
-        """
-        Get trade fills (executed trades).
+        """Get trade fills (executed trades).
 
         Args:
             ticker: Filter by market ticker.
             order_id: Filter by specific order ID.
-            min_ts: Minimum timestamp (Unix timestamp in seconds).
-            max_ts: Maximum timestamp (Unix timestamp in seconds).
-            limit: Maximum number of fills per page (default 100, max 200).
+            min_ts: Minimum timestamp (Unix seconds).
+            max_ts: Maximum timestamp (Unix seconds).
+            limit: Maximum fills per page (default 100, max 200).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
-
-        Returns:
-            List of FillModel objects representing executed trades.
         """
-        all_fills: list[FillModel] = []
-        current_cursor = cursor
-
-        while True:
-            params = [f"limit={limit}"]
-            if ticker:
-                params.append(f"ticker={ticker}")
-            if order_id:
-                params.append(f"order_id={order_id}")
-            if min_ts:
-                params.append(f"min_ts={min_ts}")
-            if max_ts:
-                params.append(f"max_ts={max_ts}")
-            if current_cursor:
-                params.append(f"cursor={current_cursor}")
-
-            endpoint = f"/portfolio/fills?{'&'.join(params)}"
-            response = self.client.get(endpoint)
-            fills_data = response.get("fills", [])
-
-            fills = [FillModel.model_validate(f) for f in fills_data]
-            all_fills.extend(fills)
-
-            next_cursor = response.get("cursor", "")
-            if not fetch_all or not next_cursor:
-                break
-            current_cursor = next_cursor
-
-        return all_fills
-
-    def get_fills_paginated(
-        self,
-        ticker: str | None = None,
-        order_id: str | None = None,
-        min_ts: int | None = None,
-        max_ts: int | None = None,
-        limit: int = 100,
-        cursor: str | None = None,
-    ) -> tuple[list[FillModel], str]:
-        """
-        Get trade fills with pagination info.
-
-        Returns:
-            Tuple of (list of FillModel, next cursor string).
-        """
-        params = [f"limit={limit}"]
-        if ticker:
-            params.append(f"ticker={ticker}")
-        if order_id:
-            params.append(f"order_id={order_id}")
-        if min_ts:
-            params.append(f"min_ts={min_ts}")
-        if max_ts:
-            params.append(f"max_ts={max_ts}")
-        if cursor:
-            params.append(f"cursor={cursor}")
-
-        endpoint = f"/portfolio/fills?{'&'.join(params)}"
-        response = self.client.get(endpoint)
-        fills_data = response.get("fills", [])
-        next_cursor = response.get("cursor", "")
-
-        fills = [FillModel.model_validate(f) for f in fills_data]
-        return fills, next_cursor
-
+        params = {
+            "limit": limit,
+            "ticker": ticker,
+            "order_id": order_id,
+            "min_ts": min_ts,
+            "max_ts": max_ts,
+            "cursor": cursor,
+        }
+        data = self.client.paginated_get("/portfolio/fills", "fills", params, fetch_all)
+        return [FillModel.model_validate(f) for f in data]

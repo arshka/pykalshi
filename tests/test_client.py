@@ -52,7 +52,6 @@ def test_handle_404_raises_not_found(client, mock_response, mocker):
 
 def test_insufficient_funds_error(client, mock_response, mocker):
     """Verify specific error code raises InsufficientFundsError."""
-    # Note: Status code might be 400 or 200 depending on API, assuming 400 here for safety
     mocker.patch(
         "requests.post",
         return_value=mock_response(

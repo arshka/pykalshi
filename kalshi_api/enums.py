@@ -23,6 +23,13 @@ class OrderStatus(str, Enum):
     EXECUTED = "executed"
 
 
+class MarketStatus(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    SETTLED = "settled"
+    ACTIVE = "active"
+
+
 class CandlestickPeriod(int, Enum):
     """Candlestick period intervals in minutes."""
 
