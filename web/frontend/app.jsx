@@ -347,9 +347,9 @@ const MarketTerminal = ({ ticker, onBack }) => {
     );
 
     return (
-        <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#0e0e10]">
+        <div className="flex-1 flex flex-col min-h-screen bg-[#0e0e10]">
             {/* Header */}
-            <div className="px-8 py-5 border-b border-zinc-800 bg-[#0e0e10] flex justify-between items-center">
+            <div className="px-8 py-5 border-b border-zinc-800 bg-[#0e0e10] flex justify-between items-center sticky top-0 z-50">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={onBack}
@@ -382,7 +382,7 @@ const MarketTerminal = ({ ticker, onBack }) => {
             </div>
 
             {/* Main Layout */}
-            <div className="flex-1 flex overflow-hidden p-6 gap-6">
+            <div className="flex-1 flex flex-col lg:flex-row p-6 gap-6">
                 {/* Left Panel: Chart & Stats */}
                 <div className="flex-1 flex flex-col min-w-0">
 
