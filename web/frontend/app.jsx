@@ -258,8 +258,8 @@ const Orderbook = ({ ticker }) => {
     const yesLevels = book?.orderbook?.yes || [];
     const noLevels = book?.orderbook?.no || [];
 
-    const topYesBids = [...yesLevels].sort((a, b) => b[0] - a[0]).slice(0, 20);
-    const topNoBids = [...noLevels].sort((a, b) => b[0] - a[0]).slice(0, 20);
+    const topYesBids = [...yesLevels].sort((a, b) => b[0] - a[0]);
+    const topNoBids = [...noLevels].sort((a, b) => b[0] - a[0]);
 
     return (
         <div className="flex flex-col h-full bg-[#111113] rounded-lg border border-zinc-800 overflow-hidden shadow-xl">
