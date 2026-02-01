@@ -14,9 +14,8 @@ class User:
     Represents the authenticated Kalshi user/account.
     """
 
-    def __init__(self, client: KalshiClient):
+    def __init__(self, client: KalshiClient) -> None:
         self.client = client
-        self._balance_cache = None
 
     @property
     def balance(self) -> BalanceModel:

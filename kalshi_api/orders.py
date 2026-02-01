@@ -28,8 +28,5 @@ class Order:
         self.status = self.data.status
         return self.data
 
-    def __repr__(self):
-        return f"<Order {self.order_id} {self.status}>"
-
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Order {self.order_id} {self.status}>"
