@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 sys.path.append(os.getcwd())
 
 from kalshi_api.client import KalshiClient
-from kalshi_api.models import MarketModel, OrderbookResponse, BalanceModel
+from kalshi_api.models import MarketModel, OrderbookResponse, BalanceModel, EventModel
 from kalshi_api.enums import MarketStatus
 from kalshi_api.exceptions import KalshiAPIError
 
@@ -158,5 +158,40 @@ def get_market_orderbook(ticker: str):
         
         market = c.get_market(real_ticker)
         return market.get_orderbook()
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+@app.get("/api/series", response_model=List[str])
+def list_series():
+    """
+    Returns a list of unique series tickers found from active/recent events.
+    """
+    c = get_client()
+    try:
+        # Fetch a reasonable number of events to discover series
+        # We try to get diverse events by just fetching recent ones
+        events = c.get_events(limit=100, status=MarketStatus.OPEN)
+        
+        # Extract unique series tickers
+        series = sorted(list(set(e.series_ticker for e in events if e.series_ticker)))
+        return series
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+@app.get("/api/series/{series_ticker}/events", response_model=List[EventModel])
+def list_series_events(series_ticker: str):
+    c = get_client()
+    try:
+        events = c.get_events(series_ticker=series_ticker, limit=100)
+        return [e.data for e in events]
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+@app.get("/api/events/{event_ticker}/markets", response_model=List[MarketModel])
+def list_event_markets(event_ticker: str):
+    c = get_client()
+    try:
+        markets = c.get_markets(event_ticker=event_ticker)
+        return [m.data for m in markets]
     except KalshiAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
