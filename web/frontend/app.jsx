@@ -5,7 +5,8 @@ const App = () => {
         const params = new URLSearchParams(window.location.search);
         return {
             ticker: params.get('ticker'),
-            series: params.get('series') ? params.get('series').toUpperCase() : null
+            series: params.get('series') ? params.get('series').toUpperCase() : null,
+            page: params.get('page'),
         };
     };
 
@@ -28,6 +29,7 @@ const App = () => {
         const urlParams = new URLSearchParams();
         if (newParams && newParams.series) urlParams.set('series', newParams.series);
         if (newParams && newParams.ticker) urlParams.set('ticker', newParams.ticker);
+        if (newParams && newParams.page) urlParams.set('page', newParams.page);
 
         const queryString = urlParams.toString();
         const url = queryString ? `?${queryString}` : '/';
@@ -38,7 +40,9 @@ const App = () => {
 
     return (
         <div className="text-zinc-200 font-sans selection:bg-kalshi-green/30 bg-[#0e0e10] min-h-screen">
-            {params.ticker ? (
+            {params.page === 'status' ? (
+                <StatusPage onBack={() => navigate({})} />
+            ) : params.ticker ? (
                 <MarketTerminal
                     ticker={params.ticker}
                     onBack={() => navigate(params.series ? { series: params.series } : {})}
@@ -50,7 +54,10 @@ const App = () => {
                     onSelectMarket={(ticker) => navigate({ series: params.series, ticker })}
                 />
             ) : (
-                <LandingPage onSearch={(ticker, series) => navigate(ticker ? { ticker } : {}, series)} />
+                <LandingPage
+                    onSearch={(ticker, series) => navigate(ticker ? { ticker } : {}, series)}
+                    onNavigate={(page) => navigate({ page })}
+                />
             )}
         </div>
     );

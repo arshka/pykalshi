@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.getcwd())
 
 from kalshi_api.client import KalshiClient
-from kalshi_api.models import MarketModel, OrderbookResponse, BalanceModel, EventModel
+from kalshi_api.models import MarketModel, OrderbookResponse, BalanceModel, EventModel, ExchangeStatus, ExchangeSchedule, Announcement
 from kalshi_api.enums import MarketStatus, CandlestickPeriod
 from kalshi_api.exceptions import KalshiAPIError
 
@@ -75,6 +75,23 @@ def get_balance_short():
     c = get_client()
     try:
         return c.portfolio.balance
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@app.get("/api/exchange/status")
+def get_exchange_status():
+    """Get exchange operational status, schedule, and announcements."""
+    c = get_client()
+    try:
+        status = c.exchange.status
+        schedule = c.exchange.get_schedule()
+        announcements = c.exchange.get_announcements()
+        return {
+            "status": status.model_dump(),
+            "schedule": [s.model_dump() for s in schedule.schedule],
+            "announcements": [a.model_dump() for a in announcements],
+        }
     except KalshiAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
