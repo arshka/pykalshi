@@ -37,3 +37,18 @@ class CandlestickPeriod(int, Enum):
     ONE_MINUTE = 1
     ONE_HOUR = 60
     ONE_DAY = 1440
+
+
+class TimeInForce(str, Enum):
+    """Order time-in-force options."""
+
+    GTC = "gtc"  # Good till canceled (default)
+    IOC = "ioc"  # Immediate or cancel - fill what you can, cancel rest
+    FOK = "fok"  # Fill or kill - fill entirely or cancel entirely
+
+
+class SelfTradePrevention(str, Enum):
+    """Self-trade prevention behavior."""
+
+    CANCEL_TAKER = "cancel_resting"  # Cancel resting order on self-cross
+    CANCEL_MAKER = "cancel_aggressing"  # Cancel incoming order on self-cross

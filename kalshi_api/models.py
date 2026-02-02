@@ -280,6 +280,91 @@ class OrderbookResponse(BaseModel):
             return None
         return max(p[0] for p in self.orderbook.no)
 
+    @cached_property
+    def best_yes_ask(self) -> Optional[int]:
+        """Lowest YES ask (= 100 - best NO bid)."""
+        if self.best_no_bid is None:
+            return None
+        return 100 - self.best_no_bid
+
+    @cached_property
+    def spread(self) -> Optional[int]:
+        """Bid-ask spread in cents. None if no two-sided market."""
+        if self.best_yes_bid is None or self.best_yes_ask is None:
+            return None
+        return self.best_yes_ask - self.best_yes_bid
+
+    @cached_property
+    def mid(self) -> Optional[float]:
+        """Mid price. None if no two-sided market."""
+        if self.best_yes_bid is None or self.best_yes_ask is None:
+            return None
+        return (self.best_yes_bid + self.best_yes_ask) / 2
+
+    @cached_property
+    def spread_bps(self) -> Optional[float]:
+        """Spread as basis points of mid. None if no two-sided market."""
+        if self.spread is None or self.mid is None or self.mid == 0:
+            return None
+        return (self.spread / self.mid) * 10000
+
+    def yes_depth(self, through_price: int) -> int:
+        """Total YES bid quantity at or above `through_price`."""
+        if not self.orderbook.yes:
+            return 0
+        return sum(q for p, q in self.orderbook.yes if p >= through_price)
+
+    def no_depth(self, through_price: int) -> int:
+        """Total NO bid quantity at or above `through_price`."""
+        if not self.orderbook.no:
+            return 0
+        return sum(q for p, q in self.orderbook.no if p >= through_price)
+
+    @cached_property
+    def imbalance(self) -> Optional[float]:
+        """Order imbalance: (yes_depth - no_depth) / (yes_depth + no_depth). Range [-1, 1]."""
+        yes_total = sum(q for _, q in self.orderbook.yes) if self.orderbook.yes else 0
+        no_total = sum(q for _, q in self.orderbook.no) if self.orderbook.no else 0
+        total = yes_total + no_total
+        if total == 0:
+            return None
+        return (yes_total - no_total) / total
+
+    def vwap_to_fill(self, side: str, size: int) -> Optional[float]:
+        """Volume-weighted average price to fill `size` contracts.
+
+        Args:
+            side: "yes" or "no" - the side you're buying
+            size: Number of contracts to fill
+
+        Returns:
+            VWAP in cents, or None if insufficient liquidity.
+        """
+        # To buy YES, you lift NO offers (sorted by price descending = best first)
+        # To buy NO, you lift YES offers (sorted by price descending = best first)
+        levels = self.orderbook.no if side == "yes" else self.orderbook.yes
+        if not levels:
+            return None
+
+        # Sort by price descending (best offer = highest price for the other side)
+        sorted_levels = sorted(levels, key=lambda x: x[0], reverse=True)
+
+        remaining = size
+        cost = 0
+        for price, qty in sorted_levels:
+            take = min(remaining, qty)
+            # If buying YES, you pay (100 - no_price) per contract
+            # If buying NO, you pay (100 - yes_price) per contract
+            fill_price = 100 - price
+            cost += take * fill_price
+            remaining -= take
+            if remaining <= 0:
+                break
+
+        if remaining > 0:
+            return None  # Insufficient liquidity
+        return cost / size
+
 
 # --- Exchange Models ---
 
@@ -370,5 +455,82 @@ class TradeModel(BaseModel):
     taker_side: Optional[str] = None
     created_time: Optional[str] = None
     ts: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class SettlementModel(BaseModel):
+    """Settlement record for a resolved position."""
+    ticker: str
+    event_ticker: Optional[str] = None
+    market_result: Optional[str] = None  # "yes" or "no"
+    yes_count: int = 0
+    no_count: int = 0
+    yes_total_cost: int = 0
+    no_total_cost: int = 0
+    revenue: int = 0  # Payout in cents
+    value: int = 0
+    fee_cost: Optional[str] = None  # Dollar string like "0.3200"
+    settled_time: Optional[str] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+    @property
+    def net_position(self) -> int:
+        """Net position: positive = yes, negative = no."""
+        return self.yes_count - self.no_count
+
+    @property
+    def pnl(self) -> int:
+        """Net P&L in cents (revenue - costs - fees)."""
+        fee_cents = int(float(self.fee_cost or 0) * 100)
+        return self.revenue - self.yes_total_cost - self.no_total_cost - fee_cents
+
+
+class QueuePositionModel(BaseModel):
+    """Order's position in the queue at its price level."""
+    order_id: str
+    queue_position: int  # 0-indexed position in queue
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class OrderGroupModel(BaseModel):
+    """Order group for linked order strategies (OCO, bracket)."""
+    order_group_id: str
+    status: Optional[str] = None  # "active", "triggered", "canceled"
+    orders: Optional[list[str]] = None  # Order IDs in group
+    created_time: Optional[str] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+# --- Subaccount Models ---
+
+class SubaccountModel(BaseModel):
+    """Subaccount info."""
+    subaccount_id: str
+    subaccount_number: int
+    created_time: Optional[str] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class SubaccountBalanceModel(BaseModel):
+    """Balance for a single subaccount."""
+    subaccount_id: str
+    balance: int  # In cents
+    portfolio_value: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class SubaccountTransferModel(BaseModel):
+    """Record of a transfer between subaccounts."""
+    transfer_id: str
+    from_subaccount_id: str
+    to_subaccount_id: str
+    amount: int  # In cents
+    created_time: Optional[str] = None
 
     model_config = ConfigDict(extra="ignore")

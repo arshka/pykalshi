@@ -29,6 +29,8 @@ from .enums import (
     OrderStatus,
     MarketStatus,
     CandlestickPeriod,
+    TimeInForce,
+    SelfTradePrevention,
 )
 from .models import (
     PositionModel,
@@ -46,7 +48,15 @@ from .models import (
     GeneratedAPIKey,
     SeriesModel,
     TradeModel,
+    SettlementModel,
+    QueuePositionModel,
+    OrderGroupModel,
+    SubaccountModel,
+    SubaccountBalanceModel,
+    SubaccountTransferModel,
 )
+from .orderbook import OrderbookManager
+from .rate_limiter import RateLimiter, NoOpRateLimiter
 from .exceptions import (
     KalshiError,
     KalshiAPIError,
@@ -85,6 +95,8 @@ __all__ = [
     "OrderStatus",
     "MarketStatus",
     "CandlestickPeriod",
+    "TimeInForce",
+    "SelfTradePrevention",
     # Models
     "PositionModel",
     "FillModel",
@@ -101,6 +113,17 @@ __all__ = [
     "GeneratedAPIKey",
     "SeriesModel",
     "TradeModel",
+    "SettlementModel",
+    "QueuePositionModel",
+    "OrderGroupModel",
+    # Utilities
+    "OrderbookManager",
+    "RateLimiter",
+    "NoOpRateLimiter",
+    # Subaccount Models
+    "SubaccountModel",
+    "SubaccountBalanceModel",
+    "SubaccountTransferModel",
     # Exceptions
     "KalshiError",
     "KalshiAPIError",

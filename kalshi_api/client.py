@@ -36,6 +36,7 @@ from .enums import MarketStatus, CandlestickPeriod
 from .feed import Feed
 from .exchange import Exchange
 from .api_keys import APIKeys
+from .rate_limiter import RateLimiterProtocol
 
 
 # Default configuration
@@ -61,6 +62,7 @@ class KalshiClient:
         demo: bool = False,
         timeout: float = 10.0,
         max_retries: int = 3,
+        rate_limiter: RateLimiterProtocol | None = None,
     ) -> None:
         """Initialize the Kalshi client.
 
@@ -71,6 +73,7 @@ class KalshiClient:
             demo: If True, use demo environment. Ignored if api_base is provided.
             timeout: Request timeout in seconds (default 10).
             max_retries: Max retries for transient failures (default 3). Set to 0 to disable.
+            rate_limiter: Optional rate limiter for proactive throttling. See RateLimiter class.
         """
         self.api_key_id = api_key_id or os.getenv("KALSHI_API_KEY_ID")
         private_key_path = private_key_path or os.getenv("KALSHI_PRIVATE_KEY_PATH")
@@ -88,6 +91,7 @@ class KalshiClient:
         self._api_path = urlparse(self.api_base).path
         self.timeout = timeout
         self.max_retries = max_retries
+        self.rate_limiter = rate_limiter
         self.private_key = self._load_private_key(private_key_path)
         self._session = requests.Session()
 
@@ -180,6 +184,12 @@ class KalshiClient:
         url = f"{self.api_base}{endpoint}"
 
         for attempt in range(self.max_retries + 1):
+            # Proactive throttling if rate limiter is configured
+            if self.rate_limiter is not None:
+                wait_time = self.rate_limiter.acquire()
+                if wait_time > 0:
+                    logger.debug("Rate limiter waited %.3fs", wait_time)
+
             headers = self._get_headers(method, endpoint)
             try:
                 response = self._session.request(
@@ -199,6 +209,15 @@ class KalshiClient:
                 )
                 time.sleep(wait)
                 continue
+
+            # Update rate limiter from response headers
+            if self.rate_limiter is not None:
+                remaining = response.headers.get("X-RateLimit-Remaining")
+                reset_at = response.headers.get("X-RateLimit-Reset")
+                self.rate_limiter.update_from_headers(
+                    remaining=int(remaining) if remaining else None,
+                    reset_at=int(reset_at) if reset_at else None,
+                )
 
             if response.status_code not in _RETRYABLE_STATUS_CODES:
                 return response
