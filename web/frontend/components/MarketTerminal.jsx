@@ -11,14 +11,8 @@ const MarketTerminal = ({ ticker, onBack }) => {
     const [error, setError] = useState(null);
     const [balance, setBalance] = useState(null);
 
-    // Real-time state from WebSocket
-    const [orderbook, setOrderbook] = useState({ yes: [], no: [] });
-    const [wsConnected, setWsConnected] = useState(false);
-    const [livePrice, setLivePrice] = useState(null);
-    const [liveVolume, setLiveVolume] = useState(null);
-    const [liveOI, setLiveOI] = useState(null);
-    const [liveYesBid, setLiveYesBid] = useState(null);
-    const [liveYesAsk, setLiveYesAsk] = useState(null);
+    // Real-time data from WebSocket
+    const { orderbook, connected: wsConnected, liveData } = useMarketFeed(ticker);
 
     // Fetch initial market data
     useEffect(() => {
@@ -43,104 +37,12 @@ const MarketTerminal = ({ ticker, onBack }) => {
             .catch(console.error);
     }, [ticker]);
 
-    // WebSocket connection for real-time updates
-    useEffect(() => {
-        if (!ticker) return;
-
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws/market/${ticker}`;
-        let ws = null;
-        let reconnectTimeout = null;
-        let reconnectDelay = 1000; // Start at 1s, exponential backoff
-        let orderbookState = { yes: new Map(), no: new Map() };
-
-        const connect = () => {
-            ws = new WebSocket(wsUrl);
-
-            ws.onopen = () => {
-                console.log(`WebSocket connected for ${ticker}`);
-                setWsConnected(true);
-                reconnectDelay = 1000; // Reset on successful connection
-            };
-
-            ws.onclose = (e) => {
-                console.log(`WebSocket closed for ${ticker}`, e.code);
-                setWsConnected(false);
-                if (!e.wasClean) {
-                    reconnectTimeout = setTimeout(connect, reconnectDelay);
-                    reconnectDelay = Math.min(reconnectDelay * 2, 30000); // Max 30s
-                }
-            };
-
-            ws.onerror = (e) => {
-                console.error('WebSocket error:', e);
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    const msgType = data.type;
-                    const msg = data.msg || {};
-
-                    if (msgType === 'orderbook_snapshot') {
-                        // Initialize orderbook from snapshot
-                        orderbookState.yes = new Map((msg.yes || []).map(([p, q]) => [p, q]));
-                        orderbookState.no = new Map((msg.no || []).map(([p, q]) => [p, q]));
-                        updateOrderbookDisplay();
-                    }
-                    else if (msgType === 'orderbook_delta') {
-                        // Apply delta to orderbook
-                        const side = msg.side === 'yes' ? 'yes' : 'no';
-                        const price = msg.price;
-                        const delta = msg.delta;
-                        const currentQty = orderbookState[side].get(price) || 0;
-                        const newQty = currentQty + delta;
-
-                        if (newQty <= 0) {
-                            orderbookState[side].delete(price);
-                        } else {
-                            orderbookState[side].set(price, newQty);
-                        }
-                        updateOrderbookDisplay();
-                    }
-                    else if (msgType === 'ticker') {
-                        // Update live ticker data
-                        if (msg.price !== undefined) setLivePrice(msg.price);
-                        if (msg.volume !== undefined) setLiveVolume(msg.volume);
-                        if (msg.open_interest !== undefined) setLiveOI(msg.open_interest);
-                        if (msg.yes_bid !== undefined) setLiveYesBid(msg.yes_bid);
-                        if (msg.yes_ask !== undefined) setLiveYesAsk(msg.yes_ask);
-                    }
-                } catch (e) {
-                    console.error('Error parsing WebSocket message:', e);
-                }
-            };
-
-            function updateOrderbookDisplay() {
-                setOrderbook({
-                    yes: Array.from(orderbookState.yes.entries()),
-                    no: Array.from(orderbookState.no.entries())
-                });
-            }
-        };
-
-        connect();
-
-        return () => {
-            if (reconnectTimeout) clearTimeout(reconnectTimeout);
-            if (ws) {
-                ws.onclose = null; // Prevent reconnect on intentional close
-                ws.close();
-            }
-        };
-    }, [ticker]);
-
     // Use live values if available, otherwise fall back to initial market data
-    const displayPrice = livePrice ?? market?.last_price;
-    const displayVolume = liveVolume ?? market?.volume_24h;
-    const displayOI = liveOI ?? market?.open_interest;
-    const displayYesAsk = liveYesAsk ?? market?.yes_ask;
-    const displayNoBid = liveYesBid ? (100 - liveYesBid) : market?.no_ask;
+    const displayPrice = liveData.price ?? market?.last_price;
+    const displayVolume = liveData.volume ?? market?.volume_24h;
+    const displayOI = liveData.openInterest ?? market?.open_interest;
+    const displayYesAsk = liveData.yesAsk ?? market?.yes_ask;
+    const displayNoBid = liveData.yesBid ? (100 - liveData.yesBid) : market?.no_ask;
 
     if (loading) return (
         <div className="h-screen bg-[#0e0e10] flex items-center justify-center flex-col">

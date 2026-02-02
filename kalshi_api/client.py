@@ -29,11 +29,13 @@ from .exceptions import (
     RateLimitError,
 )
 from .events import Event
-from .markets import Market
-from .models import MarketModel, EventModel
+from .markets import Market, Series
+from .models import MarketModel, EventModel, SeriesModel, TradeModel, CandlestickResponse
 from .portfolio import Portfolio
-from .enums import MarketStatus
+from .enums import MarketStatus, CandlestickPeriod
 from .feed import Feed
+from .exchange import Exchange
+from .api_keys import APIKeys
 
 
 # Default configuration
@@ -274,6 +276,16 @@ class KalshiClient:
         """The authenticated user's portfolio."""
         return Portfolio(self)
 
+    @cached_property
+    def exchange(self) -> Exchange:
+        """Exchange status, schedule, and announcements."""
+        return Exchange(self)
+
+    @cached_property
+    def api_keys(self) -> APIKeys:
+        """API key management and rate limits."""
+        return APIKeys(self)
+
     def feed(self) -> Feed:
         """Create a new real-time data feed.
 
@@ -358,3 +370,87 @@ class KalshiClient:
         }
         data = self.paginated_get("/events", "events", params, fetch_all)
         return [Event(self, EventModel.model_validate(e)) for e in data]
+
+    def get_series(self, series_ticker: str) -> Series:
+        """Get a Series by ticker."""
+        response = self.get(f"/series/{series_ticker}")
+        model = SeriesModel.model_validate(response["series"])
+        return Series(self, model)
+
+    def get_all_series(
+        self,
+        category: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+        fetch_all: bool = False,
+    ) -> list[Series]:
+        """List all series.
+
+        Args:
+            category: Filter by category.
+            limit: Maximum results per page (default 100).
+            cursor: Pagination cursor for fetching next page.
+            fetch_all: If True, automatically fetch all pages.
+        """
+        params = {"limit": limit, "category": category, "cursor": cursor}
+        data = self.paginated_get("/series", "series", params, fetch_all)
+        return [Series(self, SeriesModel.model_validate(s)) for s in data]
+
+    def get_trades(
+        self,
+        ticker: str | None = None,
+        min_ts: int | None = None,
+        max_ts: int | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+        fetch_all: bool = False,
+    ) -> list[TradeModel]:
+        """Get public trade history.
+
+        Args:
+            ticker: Filter by market ticker.
+            min_ts: Minimum timestamp (Unix seconds).
+            max_ts: Maximum timestamp (Unix seconds).
+            limit: Maximum trades per page (default 100).
+            cursor: Pagination cursor for fetching next page.
+            fetch_all: If True, automatically fetch all pages.
+        """
+        params = {
+            "limit": limit,
+            "ticker": ticker,
+            "min_ts": min_ts,
+            "max_ts": max_ts,
+            "cursor": cursor,
+        }
+        data = self.paginated_get("/markets/trades", "trades", params, fetch_all)
+        return [TradeModel.model_validate(t) for t in data]
+
+    def get_candlesticks_batch(
+        self,
+        tickers: list[str],
+        start_ts: int,
+        end_ts: int,
+        period: CandlestickPeriod = CandlestickPeriod.ONE_HOUR,
+    ) -> dict[str, CandlestickResponse]:
+        """Batch fetch candlesticks for multiple markets.
+
+        Args:
+            tickers: List of market tickers.
+            start_ts: Start timestamp (Unix seconds).
+            end_ts: End timestamp (Unix seconds).
+            period: Candlestick period (ONE_MINUTE, ONE_HOUR, or ONE_DAY).
+
+        Returns:
+            Dict mapping ticker to CandlestickResponse.
+        """
+        body = {
+            "tickers": tickers,
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "period_interval": period.value,
+        }
+        response = self.post("/markets/candlesticks", body)
+        return {
+            ticker: CandlestickResponse.model_validate(data)
+            for ticker, data in response.get("candlesticks", {}).items()
+        }

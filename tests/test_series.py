@@ -1,0 +1,332 @@
+"""Tests for Series, trades, and batch candlesticks functionality."""
+
+import pytest
+import json
+from unittest.mock import ANY
+
+from kalshi_api import Series
+from kalshi_api.enums import CandlestickPeriod
+
+
+class TestGetSeries:
+    """Tests for fetching a single series."""
+
+    def test_get_series(self, client, mock_response):
+        """Test fetching a series by ticker."""
+        client._session.request.return_value = mock_response({
+            "series": {
+                "ticker": "INXD",
+                "title": "S&P 500 Daily",
+                "category": "economics",
+                "tags": ["stocks", "daily"],
+                "frequency": "daily",
+            }
+        })
+
+        series = client.get_series("INXD")
+
+        assert isinstance(series, Series)
+        assert series.ticker == "INXD"
+        assert series.title == "S&P 500 Daily"
+        assert series.category == "economics"
+        client._session.request.assert_called_with(
+            "GET",
+            "https://demo-api.elections.kalshi.com/trade-api/v2/series/INXD",
+            headers=ANY,
+            timeout=ANY,
+        )
+
+    def test_get_series_not_found(self, client, mock_response):
+        """Test fetching non-existent series raises error."""
+        from kalshi_api.exceptions import ResourceNotFoundError
+
+        client._session.request.return_value = mock_response(
+            {"message": "Series not found"}, status_code=404
+        )
+
+        with pytest.raises(ResourceNotFoundError):
+            client.get_series("NONEXISTENT")
+
+
+class TestGetAllSeries:
+    """Tests for listing all series."""
+
+    def test_get_all_series(self, client, mock_response):
+        """Test listing series."""
+        client._session.request.return_value = mock_response({
+            "series": [
+                {"ticker": "INXD", "title": "S&P 500 Daily", "category": "economics"},
+                {"ticker": "KXBTC", "title": "Bitcoin Price", "category": "crypto"},
+            ],
+            "cursor": "",
+        })
+
+        series_list = client.get_all_series()
+
+        assert len(series_list) == 2
+        assert all(isinstance(s, Series) for s in series_list)
+        assert series_list[0].ticker == "INXD"
+        assert series_list[1].ticker == "KXBTC"
+
+    def test_get_all_series_with_category(self, client, mock_response):
+        """Test listing series filtered by category."""
+        client._session.request.return_value = mock_response({
+            "series": [{"ticker": "KXBTC", "category": "crypto"}],
+            "cursor": "",
+        })
+
+        client.get_all_series(category="crypto")
+
+        call_url = client._session.request.call_args.args[1]
+        assert "category=crypto" in call_url
+
+    def test_get_all_series_pagination(self, client, mock_response):
+        """Test series pagination with fetch_all."""
+        client._session.request.side_effect = [
+            mock_response({
+                "series": [{"ticker": "S1"}],
+                "cursor": "next_page",
+            }),
+            mock_response({
+                "series": [{"ticker": "S2"}],
+                "cursor": "",
+            }),
+        ]
+
+        series_list = client.get_all_series(fetch_all=True)
+
+        assert len(series_list) == 2
+        assert series_list[0].ticker == "S1"
+        assert series_list[1].ticker == "S2"
+        assert client._session.request.call_count == 2
+
+
+class TestSeriesObject:
+    """Tests for Series object methods."""
+
+    def test_series_get_markets(self, client, mock_response):
+        """Test fetching markets for a series."""
+        client._session.request.side_effect = [
+            # First call: get series
+            mock_response({
+                "series": {"ticker": "INXD", "title": "S&P 500 Daily"}
+            }),
+            # Second call: get markets
+            mock_response({
+                "markets": [
+                    {"ticker": "INXD-24JAN01", "title": "S&P 500 Jan 1"},
+                    {"ticker": "INXD-24JAN02", "title": "S&P 500 Jan 2"},
+                ],
+                "cursor": "",
+            }),
+        ]
+
+        series = client.get_series("INXD")
+        markets = series.get_markets()
+
+        assert len(markets) == 2
+        assert markets[0].ticker == "INXD-24JAN01"
+
+        # Verify series_ticker filter was passed
+        call_url = client._session.request.call_args.args[1]
+        assert "series_ticker=INXD" in call_url
+
+    def test_series_repr(self, client, mock_response):
+        """Test Series string representation."""
+        client._session.request.return_value = mock_response({
+            "series": {"ticker": "TEST"}
+        })
+
+        series = client.get_series("TEST")
+
+        assert repr(series) == "<Series TEST>"
+
+    def test_series_attribute_delegation(self, client, mock_response):
+        """Test that Series delegates unknown attributes to data."""
+        client._session.request.return_value = mock_response({
+            "series": {
+                "ticker": "TEST",
+                "frequency": "daily",
+                "settlement_timer_seconds": 3600,
+            }
+        })
+
+        series = client.get_series("TEST")
+
+        assert series.frequency == "daily"
+        assert series.settlement_timer_seconds == 3600
+
+
+class TestGetTrades:
+    """Tests for public trade history."""
+
+    def test_get_trades(self, client, mock_response):
+        """Test fetching public trades."""
+        client._session.request.return_value = mock_response({
+            "trades": [
+                {
+                    "trade_id": "t-001",
+                    "ticker": "KXTEST-A",
+                    "count": 10,
+                    "yes_price": 55,
+                    "no_price": 45,
+                    "taker_side": "yes",
+                    "ts": 1704067200,
+                },
+                {
+                    "trade_id": "t-002",
+                    "ticker": "KXTEST-A",
+                    "count": 5,
+                    "yes_price": 56,
+                    "no_price": 44,
+                    "taker_side": "no",
+                    "ts": 1704067201,
+                },
+            ],
+            "cursor": "",
+        })
+
+        trades = client.get_trades()
+
+        assert len(trades) == 2
+        assert trades[0].trade_id == "t-001"
+        assert trades[0].count == 10
+        assert trades[0].yes_price == 55
+        assert trades[0].taker_side == "yes"
+        client._session.request.assert_called_with(
+            "GET",
+            "https://demo-api.elections.kalshi.com/trade-api/v2/markets/trades?limit=100",
+            headers=ANY,
+            timeout=ANY,
+        )
+
+    def test_get_trades_with_filters(self, client, mock_response):
+        """Test fetching trades with filters."""
+        client._session.request.return_value = mock_response({
+            "trades": [],
+            "cursor": "",
+        })
+
+        client.get_trades(
+            ticker="KXTEST-A",
+            min_ts=1704000000,
+            max_ts=1704100000,
+            limit=50,
+        )
+
+        call_url = client._session.request.call_args.args[1]
+        assert "ticker=KXTEST-A" in call_url
+        assert "min_ts=1704000000" in call_url
+        assert "max_ts=1704100000" in call_url
+        assert "limit=50" in call_url
+
+    def test_get_trades_pagination(self, client, mock_response):
+        """Test trades pagination with fetch_all."""
+        client._session.request.side_effect = [
+            mock_response({
+                "trades": [{"trade_id": "t1", "ticker": "X", "count": 1, "yes_price": 50, "no_price": 50}],
+                "cursor": "page2",
+            }),
+            mock_response({
+                "trades": [{"trade_id": "t2", "ticker": "X", "count": 1, "yes_price": 50, "no_price": 50}],
+                "cursor": "",
+            }),
+        ]
+
+        trades = client.get_trades(fetch_all=True)
+
+        assert len(trades) == 2
+        assert client._session.request.call_count == 2
+
+
+class TestBatchCandlesticks:
+    """Tests for batch candlestick retrieval."""
+
+    def test_get_candlesticks_batch(self, client, mock_response):
+        """Test batch candlestick retrieval."""
+        client._session.request.return_value = mock_response({
+            "candlesticks": {
+                "TICK1": {
+                    "ticker": "TICK1",
+                    "candlesticks": [
+                        {
+                            "end_period_ts": 1704067200,
+                            "volume": 100,
+                            "open_interest": 500,
+                            "price": {"open": 50, "high": 55, "low": 48, "close": 53},
+                        }
+                    ],
+                },
+                "TICK2": {
+                    "ticker": "TICK2",
+                    "candlesticks": [
+                        {
+                            "end_period_ts": 1704067200,
+                            "volume": 200,
+                            "open_interest": 300,
+                            "price": {"open": 60, "high": 65, "low": 58, "close": 62},
+                        }
+                    ],
+                },
+            }
+        })
+
+        result = client.get_candlesticks_batch(
+            tickers=["TICK1", "TICK2"],
+            start_ts=1704000000,
+            end_ts=1704100000,
+            period=CandlestickPeriod.ONE_HOUR,
+        )
+
+        assert "TICK1" in result
+        assert "TICK2" in result
+        assert result["TICK1"].ticker == "TICK1"
+        assert len(result["TICK1"].candlesticks) == 1
+        assert result["TICK1"].candlesticks[0].volume == 100
+
+        # Verify POST body
+        call_args = client._session.request.call_args
+        assert call_args.args[0] == "POST"
+        body = json.loads(call_args.kwargs["data"])
+        assert body["tickers"] == ["TICK1", "TICK2"]
+        assert body["start_ts"] == 1704000000
+        assert body["end_ts"] == 1704100000
+        assert body["period_interval"] == 60
+
+    def test_get_candlesticks_batch_empty(self, client, mock_response):
+        """Test batch candlesticks with no results."""
+        client._session.request.return_value = mock_response({
+            "candlesticks": {}
+        })
+
+        result = client.get_candlesticks_batch(
+            tickers=["NONEXISTENT"],
+            start_ts=1704000000,
+            end_ts=1704100000,
+        )
+
+        assert result == {}
+
+    def test_get_candlesticks_batch_different_periods(self, client, mock_response):
+        """Test batch candlesticks with different period intervals."""
+        client._session.request.return_value = mock_response({"candlesticks": {}})
+
+        # Test ONE_MINUTE
+        client.get_candlesticks_batch(
+            tickers=["X"],
+            start_ts=1,
+            end_ts=2,
+            period=CandlestickPeriod.ONE_MINUTE,
+        )
+        body = json.loads(client._session.request.call_args.kwargs["data"])
+        assert body["period_interval"] == 1
+
+        # Test ONE_DAY
+        client.get_candlesticks_batch(
+            tickers=["X"],
+            start_ts=1,
+            end_ts=2,
+            period=CandlestickPeriod.ONE_DAY,
+        )
+        body = json.loads(client._session.request.call_args.kwargs["data"])
+        assert body["period_interval"] == 1440

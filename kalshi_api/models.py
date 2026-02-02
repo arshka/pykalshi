@@ -279,3 +279,111 @@ class OrderbookResponse(BaseModel):
         if not self.orderbook.no:
             return None
         return max(p[0] for p in self.orderbook.no)
+
+
+# --- Exchange Models ---
+
+class ExchangeStatus(BaseModel):
+    """Exchange operational status."""
+    exchange_active: bool
+    trading_active: bool
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ScheduleEntry(BaseModel):
+    """A single schedule entry (open/close time)."""
+    start_time: str
+    end_time: str
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ExchangeSchedule(BaseModel):
+    """Exchange trading schedule."""
+    schedule: list[ScheduleEntry]
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class Announcement(BaseModel):
+    """Exchange announcement."""
+    id: Optional[str] = None
+    title: str
+    body: Optional[str] = None
+    type: Optional[str] = None
+    created_time: Optional[str] = None
+    delivery_time: Optional[str] = None
+    status: Optional[str] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+# --- Account Models ---
+
+class RateLimitTier(BaseModel):
+    """Rate limit for a specific tier."""
+    max_requests: int
+    period_seconds: int
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class APILimits(BaseModel):
+    """API rate limits for the authenticated user."""
+    tier: Optional[str] = None
+    limits: Optional[dict[str, RateLimitTier]] = None
+    remaining: Optional[int] = None
+    reset_at: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+# --- API Key Models ---
+
+class APIKey(BaseModel):
+    """API key information."""
+    id: str
+    name: Optional[str] = None
+    created_time: Optional[str] = None
+    last_used: Optional[str] = None
+    scopes: Optional[list[str]] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class GeneratedAPIKey(BaseModel):
+    """Newly generated API key with private key (only returned once)."""
+    id: str
+    private_key: str
+    name: Optional[str] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+# --- Series & Trade Models ---
+
+class SeriesModel(BaseModel):
+    """Pydantic model for Series data."""
+    ticker: str
+    title: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[list[str]] = None
+    settlement_timer_seconds: Optional[int] = None
+    frequency: Optional[str] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class TradeModel(BaseModel):
+    """Public trade execution record."""
+    trade_id: str
+    ticker: str
+    count: int
+    yes_price: int
+    no_price: int
+    taker_side: Optional[str] = None
+    created_time: Optional[str] = None
+    ts: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")

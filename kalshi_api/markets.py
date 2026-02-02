@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from .models import MarketModel, CandlestickResponse, OrderbookResponse
+from .models import MarketModel, CandlestickResponse, OrderbookResponse, SeriesModel, TradeModel
 from .enums import CandlestickPeriod, MarketStatus
 
 if TYPE_CHECKING:
@@ -154,3 +154,33 @@ class Market:
 
     def __repr__(self) -> str:
         return f"<Market {self.data.ticker}>"
+
+
+class Series:
+    """Represents a Kalshi Series (collection of related markets)."""
+
+    def __init__(self, client: KalshiClient, data: SeriesModel) -> None:
+        self._client = client
+        self.data = data
+
+    @property
+    def ticker(self) -> str:
+        return self.data.ticker
+
+    @property
+    def title(self) -> str | None:
+        return self.data.title
+
+    @property
+    def category(self) -> str | None:
+        return self.data.category
+
+    def get_markets(self, **kwargs) -> list[Market]:
+        """Get all markets in this series."""
+        return self._client.get_markets(series_ticker=self.ticker, **kwargs)
+
+    def __getattr__(self, name: str):
+        return getattr(self.data, name)
+
+    def __repr__(self) -> str:
+        return f"<Series {self.ticker}>"

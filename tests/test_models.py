@@ -1,5 +1,20 @@
 import pytest
-from kalshi_api.models import BalanceModel, OrderModel, MarketModel, FillModel
+from kalshi_api.models import (
+    BalanceModel,
+    OrderModel,
+    MarketModel,
+    FillModel,
+    ExchangeStatus,
+    ExchangeSchedule,
+    ScheduleEntry,
+    Announcement,
+    APILimits,
+    RateLimitTier,
+    APIKey,
+    GeneratedAPIKey,
+    SeriesModel,
+    TradeModel,
+)
 from kalshi_api.enums import Action, Side, OrderStatus
 
 
@@ -63,3 +78,230 @@ def test_fill_model_fee_cost_is_dollar_string():
     model = FillModel.model_validate(data)
     assert model.fee_cost == "0.3200"
     assert isinstance(model.fee_cost, str)
+
+
+# --- Exchange Models ---
+
+def test_exchange_status_model():
+    """Test ExchangeStatus model validation."""
+    data = {"exchange_active": True, "trading_active": False}
+    model = ExchangeStatus.model_validate(data)
+    assert model.exchange_active is True
+    assert model.trading_active is False
+
+
+def test_schedule_entry_model():
+    """Test ScheduleEntry model validation."""
+    data = {"start_time": "2024-01-01T09:00:00Z", "end_time": "2024-01-01T17:00:00Z"}
+    model = ScheduleEntry.model_validate(data)
+    assert model.start_time == "2024-01-01T09:00:00Z"
+    assert model.end_time == "2024-01-01T17:00:00Z"
+
+
+def test_exchange_schedule_model():
+    """Test ExchangeSchedule model validation."""
+    data = {
+        "schedule": [
+            {"start_time": "2024-01-01T09:00:00Z", "end_time": "2024-01-01T17:00:00Z"},
+        ]
+    }
+    model = ExchangeSchedule.model_validate(data)
+    assert len(model.schedule) == 1
+    assert isinstance(model.schedule[0], ScheduleEntry)
+
+
+def test_announcement_model():
+    """Test Announcement model validation."""
+    data = {
+        "id": "ann-001",
+        "title": "Test Announcement",
+        "body": "This is a test.",
+        "type": "info",
+        "created_time": "2024-01-01T12:00:00Z",
+    }
+    model = Announcement.model_validate(data)
+    assert model.id == "ann-001"
+    assert model.title == "Test Announcement"
+    assert model.type == "info"
+
+
+def test_announcement_model_minimal():
+    """Test Announcement with only required fields."""
+    data = {"title": "Minimal Announcement"}
+    model = Announcement.model_validate(data)
+    assert model.title == "Minimal Announcement"
+    assert model.id is None
+    assert model.body is None
+
+
+# --- Account Models ---
+
+def test_rate_limit_tier_model():
+    """Test RateLimitTier model validation."""
+    data = {"max_requests": 100, "period_seconds": 60}
+    model = RateLimitTier.model_validate(data)
+    assert model.max_requests == 100
+    assert model.period_seconds == 60
+
+
+def test_api_limits_model():
+    """Test APILimits model validation."""
+    data = {
+        "tier": "standard",
+        "remaining": 95,
+        "reset_at": 1704067260,
+    }
+    model = APILimits.model_validate(data)
+    assert model.tier == "standard"
+    assert model.remaining == 95
+    assert model.reset_at == 1704067260
+
+
+def test_api_limits_model_minimal():
+    """Test APILimits with minimal data."""
+    data = {}
+    model = APILimits.model_validate(data)
+    assert model.tier is None
+    assert model.remaining is None
+
+
+# --- API Key Models ---
+
+def test_api_key_model():
+    """Test APIKey model validation."""
+    data = {
+        "id": "key-001",
+        "name": "Trading Bot",
+        "created_time": "2024-01-01T00:00:00Z",
+        "last_used": "2024-01-15T12:00:00Z",
+        "scopes": ["read", "trade"],
+    }
+    model = APIKey.model_validate(data)
+    assert model.id == "key-001"
+    assert model.name == "Trading Bot"
+    assert model.scopes == ["read", "trade"]
+
+
+def test_api_key_model_minimal():
+    """Test APIKey with only required fields."""
+    data = {"id": "key-002"}
+    model = APIKey.model_validate(data)
+    assert model.id == "key-002"
+    assert model.name is None
+    assert model.scopes is None
+
+
+def test_generated_api_key_model():
+    """Test GeneratedAPIKey model validation."""
+    data = {
+        "id": "gen-001",
+        "private_key": "-----BEGIN RSA PRIVATE KEY-----\nMIIE...",
+        "name": "Generated Key",
+    }
+    model = GeneratedAPIKey.model_validate(data)
+    assert model.id == "gen-001"
+    assert "PRIVATE KEY" in model.private_key
+    assert model.name == "Generated Key"
+
+
+# --- Series & Trade Models ---
+
+def test_series_model():
+    """Test SeriesModel validation."""
+    data = {
+        "ticker": "INXD",
+        "title": "S&P 500 Daily",
+        "category": "economics",
+        "tags": ["stocks", "daily"],
+        "frequency": "daily",
+        "settlement_timer_seconds": 3600,
+    }
+    model = SeriesModel.model_validate(data)
+    assert model.ticker == "INXD"
+    assert model.title == "S&P 500 Daily"
+    assert model.category == "economics"
+    assert model.tags == ["stocks", "daily"]
+    assert model.frequency == "daily"
+
+
+def test_series_model_minimal():
+    """Test SeriesModel with only required fields."""
+    data = {"ticker": "TEST"}
+    model = SeriesModel.model_validate(data)
+    assert model.ticker == "TEST"
+    assert model.title is None
+    assert model.tags is None
+
+
+def test_trade_model():
+    """Test TradeModel validation."""
+    data = {
+        "trade_id": "t-001",
+        "ticker": "KXTEST",
+        "count": 10,
+        "yes_price": 55,
+        "no_price": 45,
+        "taker_side": "yes",
+        "created_time": "2024-01-01T12:00:00Z",
+        "ts": 1704067200,
+    }
+    model = TradeModel.model_validate(data)
+    assert model.trade_id == "t-001"
+    assert model.ticker == "KXTEST"
+    assert model.count == 10
+    assert model.yes_price == 55
+    assert model.no_price == 45
+    assert model.taker_side == "yes"
+
+
+def test_trade_model_minimal():
+    """Test TradeModel with only required fields."""
+    data = {
+        "trade_id": "t-002",
+        "ticker": "TEST",
+        "count": 1,
+        "yes_price": 50,
+        "no_price": 50,
+    }
+    model = TradeModel.model_validate(data)
+    assert model.trade_id == "t-002"
+    assert model.taker_side is None
+    assert model.ts is None
+
+
+# --- Extra Fields Handling ---
+
+def test_models_ignore_extra_fields():
+    """Verify all new models ignore extra fields for forward compatibility."""
+    # ExchangeStatus
+    es = ExchangeStatus.model_validate({
+        "exchange_active": True,
+        "trading_active": True,
+        "future_field": "ignored",
+    })
+    assert not hasattr(es, "future_field")
+
+    # APIKey
+    ak = APIKey.model_validate({
+        "id": "key",
+        "unknown_field": "ignored",
+    })
+    assert not hasattr(ak, "unknown_field")
+
+    # SeriesModel
+    sm = SeriesModel.model_validate({
+        "ticker": "TEST",
+        "new_api_field": "ignored",
+    })
+    assert not hasattr(sm, "new_api_field")
+
+    # TradeModel
+    tm = TradeModel.model_validate({
+        "trade_id": "t",
+        "ticker": "X",
+        "count": 1,
+        "yes_price": 50,
+        "no_price": 50,
+        "extra": "ignored",
+    })
+    assert not hasattr(tm, "extra")

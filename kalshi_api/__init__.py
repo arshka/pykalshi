@@ -8,9 +8,11 @@ import logging
 
 from .client import KalshiClient
 from .events import Event
-from .markets import Market
+from .markets import Market, Series
 from .orders import Order
 from .portfolio import Portfolio
+from .exchange import Exchange
+from .api_keys import APIKeys
 from .feed import (
     Feed,
     TickerMessage,
@@ -37,6 +39,14 @@ from .models import (
     EventModel,
     OrderbookResponse,
     CandlestickResponse,
+    ExchangeStatus,
+    ExchangeSchedule,
+    Announcement,
+    APILimits,
+    APIKey,
+    GeneratedAPIKey,
+    SeriesModel,
+    TradeModel,
 )
 from .exceptions import (
     KalshiError,
@@ -56,8 +66,11 @@ __all__ = [
     # Domain objects
     "Event",
     "Market",
+    "Series",
     "Order",
     "Portfolio",
+    "Exchange",
+    "APIKeys",
     # Feed (WebSocket)
     "Feed",
     "TickerMessage",
@@ -82,6 +95,14 @@ __all__ = [
     "EventModel",
     "OrderbookResponse",
     "CandlestickResponse",
+    "ExchangeStatus",
+    "ExchangeSchedule",
+    "Announcement",
+    "APILimits",
+    "APIKey",
+    "GeneratedAPIKey",
+    "SeriesModel",
+    "TradeModel",
     # Exceptions
     "KalshiError",
     "KalshiAPIError",

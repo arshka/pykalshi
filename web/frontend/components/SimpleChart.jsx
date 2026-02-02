@@ -12,7 +12,10 @@ const SimpleChart = ({ ticker }) => {
         let period = 'hour';
         let limit = 168;
 
-        if (timeframe === '1D') {
+        if (timeframe === '2H') {
+            period = 'minute';
+            limit = 120;
+        } else if (timeframe === '1D') {
             period = 'minute';
             limit = 1440;
         } else if (timeframe === '1W') {
@@ -38,7 +41,7 @@ const SimpleChart = ({ ticker }) => {
 
     const formatAxisDate = (ts) => {
         const d = new Date(ts * 1000);
-        if (timeframe === '1D') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (timeframe === '2H' || timeframe === '1D') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         return d.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
     };
 
@@ -47,7 +50,7 @@ const SimpleChart = ({ ticker }) => {
     if (!data.length) return (
         <div className="h-full flex flex-col items-center justify-center text-zinc-600 text-xs uppercase relative">
             <div className="absolute top-2 right-4 flex gap-2">
-                {['1D', '1W', '1M', 'ALL'].map(tf => (
+                {['2H', '1D', '1W', '1M', 'ALL'].map(tf => (
                     <button
                         key={tf}
                         onClick={() => setTimeframe(tf)}
@@ -109,13 +112,13 @@ const SimpleChart = ({ ticker }) => {
         : null;
 
     const displayDate = currentDate
-        ? (timeframe === '1D'
+        ? (timeframe === '2H' || timeframe === '1D'
             ? currentDate.toLocaleTimeString()
             : currentDate.toLocaleDateString() + ' ' + currentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
         : `${formatAxisDate(data[0].ts)} - ${formatAxisDate(data[data.length - 1].ts)}`;
 
     return (
-        <div className="w-full h-full relative group p-4 flex flex-col">
+        <div className="w-full h-full relative group pt-4 pb-4 pl-4 pr-10 flex flex-col">
             <div className="flex justify-between items-start mb-2 z-10 relative">
                 <div className="flex flex-col">
                     <span className={`text-2xl font-mono tracking-tight font-bold ${isPositive ? "text-green-400" : "text-red-400"}`}>
@@ -126,7 +129,7 @@ const SimpleChart = ({ ticker }) => {
                     </span>
                 </div>
                 <div className="flex gap-1 bg-[#18181b] p-1 rounded-lg border border-zinc-800">
-                    {['1D', '1W', '1M', 'ALL'].map(tf => (
+                    {['2H', '1D', '1W', '1M', 'ALL'].map(tf => (
                         <button
                             key={tf}
                             onClick={() => setTimeframe(tf)}
@@ -138,7 +141,7 @@ const SimpleChart = ({ ticker }) => {
                 </div>
             </div>
 
-            <div className="flex-1 relative cursor-crosshair">
+            <div className="flex-1 relative cursor-crosshair overflow-visible">
                 <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none"
                     onMouseLeave={() => setHoverIndex(null)}
                     onMouseMove={(e) => {
