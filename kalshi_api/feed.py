@@ -10,6 +10,7 @@ import itertools
 import json
 import logging
 import threading
+import time
 from typing import Any, Callable, Optional, TYPE_CHECKING, Union
 
 from pydantic import BaseModel, ConfigDict
@@ -113,6 +114,25 @@ class FillMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class PositionMessage(BaseModel):
+    """Real-time position update (private channel).
+
+    Sent when your position in a market changes (after fills settle).
+    Includes realized P&L and current exposure.
+    """
+
+    ticker: str
+    position: Optional[int] = None  # Net contracts (positive = yes, negative = no)
+    market_exposure: Optional[int] = None  # Current exposure in cents
+    realized_pnl: Optional[int] = None  # Realized P&L in cents
+    total_traded: Optional[int] = None  # Total contracts traded
+    resting_orders_count: Optional[int] = None  # Open orders count
+    fees_paid: Optional[int] = None  # Fees paid in cents
+    ts: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
 # Type alias for orderbook messages (handlers receive either type)
 OrderbookMessage = Union[OrderbookSnapshotMessage, OrderbookDeltaMessage]
 
@@ -123,6 +143,7 @@ _MESSAGE_MODELS: dict[str, type[BaseModel]] = {
     "orderbook_delta": OrderbookDeltaMessage,
     "trade": TradeMessage,
     "fill": FillMessage,
+    "market_position": PositionMessage,
 }
 
 # Maps message types to channel name for handler lookup
@@ -132,6 +153,7 @@ _TYPE_TO_CHANNEL: dict[str, str] = {
     "ticker": "ticker",
     "trade": "trade",
     "fill": "fill",
+    "market_position": "market_positions",
 }
 
 
@@ -175,6 +197,7 @@ class Feed:
         - "trade": Public trade executions (public)
         - "orderbook_delta": Orderbook snapshots and deltas (requires auth)
         - "fill": Your order fills (requires auth, no market filter)
+        - "market_positions": Real-time position updates with P&L (requires auth, no market filter)
         - "market_lifecycle_v2": Market state changes (public)
     """
 
@@ -195,6 +218,13 @@ class Feed:
         self._connected = threading.Event()
         self._lock = threading.Lock()
 
+        # Latency and health tracking
+        self._connected_at: Optional[float] = None
+        self._last_message_at: Optional[float] = None
+        self._last_server_ts: Optional[int] = None  # Server timestamp in ms
+        self._message_count: int = 0
+        self._reconnect_count: int = 0
+
         # Determine WS URL from client's API base
         self._ws_url = DEMO_WS_BASE if "demo" in client.api_base else DEFAULT_WS_BASE
 
@@ -213,7 +243,7 @@ class Feed:
             feed.on("ticker", my_handler)
 
         Args:
-            channel: Channel name ("ticker", "orderbook_delta", "trade", "fill").
+            channel: Channel name ("ticker", "orderbook_delta", "trade", "fill", "market_positions").
             handler: Optional handler function. If None, returns a decorator.
 
         Returns:
@@ -239,12 +269,13 @@ class Feed:
         """Subscribe to a channel.
 
         Args:
-            channel: Channel name ("ticker", "orderbook_delta", "trade", "fill").
+            channel: Channel name ("ticker", "orderbook_delta", "trade", "fill", "market_positions").
             market_ticker: Filter to a single market.
             market_tickers: Filter to multiple markets.
 
         Note:
-            - For "fill" channel, market filters are ignored (you get all your fills).
+            - For "fill" and "market_positions" channels, market filters are ignored
+              (you get all your fills/positions).
             - Can be called before or after start(). If called after, subscription
               is sent immediately.
         """
@@ -322,11 +353,49 @@ class Feed:
             self._thread.join(timeout=5)
             self._thread = None
         self._connected.clear()
+        self._connected_at = None
 
     @property
     def is_connected(self) -> bool:
         """Whether the WebSocket is currently connected."""
         return self._connected.is_set()
+
+    @property
+    def latency_ms(self) -> Optional[float]:
+        """Estimated latency in milliseconds based on last message timestamp.
+
+        Returns None if no messages with timestamps have been received.
+        This measures the difference between the server's timestamp and
+        when we received the message locally. Assumes clocks are synchronized.
+        """
+        if self._last_server_ts is None or self._last_message_at is None:
+            return None
+        local_ms = self._last_message_at * 1000
+        return local_ms - self._last_server_ts
+
+    @property
+    def messages_received(self) -> int:
+        """Total number of messages received since feed started."""
+        return self._message_count
+
+    @property
+    def uptime_seconds(self) -> Optional[float]:
+        """Seconds since connection was established. None if not connected."""
+        if self._connected_at is None or not self.is_connected:
+            return None
+        return time.time() - self._connected_at
+
+    @property
+    def seconds_since_last_message(self) -> Optional[float]:
+        """Seconds since last message was received. None if no messages yet."""
+        if self._last_message_at is None:
+            return None
+        return time.time() - self._last_message_at
+
+    @property
+    def reconnect_count(self) -> int:
+        """Number of times the feed has reconnected (0 on first connection)."""
+        return self._reconnect_count
 
     def _run(self) -> None:
         """Background thread entry point."""
@@ -363,6 +432,11 @@ class Feed:
                 ) as ws:
                     self._ws = ws
                     backoff = 0.5  # Reset on successful connect
+
+                    # Track connection time
+                    if self._connected_at is not None:
+                        self._reconnect_count += 1
+                    self._connected_at = time.time()
 
                     # Replay all active subscriptions
                     with self._lock:
@@ -416,6 +490,11 @@ class Feed:
 
     def _dispatch(self, raw: str | bytes) -> None:
         """Parse incoming message and dispatch to handlers."""
+        # Record receive time for latency calculation
+        receive_time = time.time()
+        self._last_message_at = receive_time
+        self._message_count += 1
+
         try:
             data = json.loads(raw)
         except (json.JSONDecodeError, TypeError):
@@ -426,14 +505,20 @@ class Feed:
         if not msg_type:
             return
 
+        # Extract server timestamp if present (in milliseconds)
+        payload = data.get("msg", data)
+        if isinstance(payload, dict):
+            ts = payload.get("ts")
+            if ts is not None:
+                self._last_server_ts = ts
+
         # Resolve channel for handler lookup
         channel = _TYPE_TO_CHANNEL.get(msg_type, msg_type)
         handlers = self._handlers.get(channel)
         if not handlers:
             return
 
-        # Parse payload into typed model
-        payload = data.get("msg", data)
+        # Parse payload into typed model (payload already extracted above)
         model_cls = _MESSAGE_MODELS.get(msg_type)
         if model_cls:
             try:
@@ -460,4 +545,6 @@ class Feed:
     def __repr__(self) -> str:
         status = "connected" if self.is_connected else "disconnected"
         n = len(self._active_subs)
-        return f"<Feed {status} subs={n}>"
+        latency = self.latency_ms
+        latency_str = f" latency={latency:.1f}ms" if latency is not None else ""
+        return f"<Feed {status} subs={n} msgs={self._message_count}{latency_str}>"

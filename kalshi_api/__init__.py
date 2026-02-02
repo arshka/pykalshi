@@ -21,6 +21,7 @@ from .feed import (
     OrderbookMessage,
     TradeMessage,
     FillMessage,
+    PositionMessage,
 )
 from .enums import (
     Side,
@@ -64,6 +65,7 @@ from .exceptions import (
     InsufficientFundsError,
     ResourceNotFoundError,
     RateLimitError,
+    OrderRejectedError,
 )
 
 # Set up logging to NullHandler by default to avoid "No handler found" warnings.
@@ -88,6 +90,7 @@ __all__ = [
     "OrderbookMessage",
     "TradeMessage",
     "FillMessage",
+    "PositionMessage",
     # Enums
     "Side",
     "Action",
@@ -131,4 +134,5 @@ __all__ = [
     "InsufficientFundsError",
     "ResourceNotFoundError",
     "RateLimitError",
+    "OrderRejectedError",
 ]

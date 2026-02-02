@@ -11,6 +11,7 @@ from kalshi_api.feed import (
     OrderbookDeltaMessage,
     TradeMessage,
     FillMessage,
+    PositionMessage,
     DEFAULT_WS_BASE,
     DEMO_WS_BASE,
 )
@@ -285,6 +286,36 @@ class TestDispatch:
         assert msg.order_id == "ord-1"
         assert msg.is_taker is True
 
+    def test_position_message(self, client):
+        """Position messages are parsed correctly."""
+        feed = Feed(client)
+        received = []
+        feed.on("market_positions", received.append)
+
+        raw = json.dumps({
+            "type": "market_position",
+            "sid": 5,
+            "seq": 1,
+            "msg": {
+                "ticker": "KXTEST-A",
+                "position": 10,
+                "market_exposure": 450,
+                "realized_pnl": 250,
+                "total_traded": 25,
+                "resting_orders_count": 2,
+                "fees_paid": 50,
+            }
+        })
+        feed._dispatch(raw)
+
+        assert len(received) == 1
+        msg = received[0]
+        assert isinstance(msg, PositionMessage)
+        assert msg.ticker == "KXTEST-A"
+        assert msg.position == 10
+        assert msg.market_exposure == 450
+        assert msg.realized_pnl == 250
+
     def test_no_handler_registered(self, client):
         """Messages are silently dropped when no handler is registered."""
         feed = Feed(client)
@@ -501,6 +532,23 @@ class TestMessageModels:
         assert msg.count == 5
         assert msg.is_taker is True
 
+    def test_position_model(self):
+        """PositionMessage parses correctly."""
+        msg = PositionMessage(
+            ticker="KXTEST",
+            position=10,
+            market_exposure=450,
+            realized_pnl=250,
+            total_traded=25,
+            resting_orders_count=2,
+            fees_paid=50,
+            ts=1704067200,
+        )
+        assert msg.ticker == "KXTEST"
+        assert msg.position == 10
+        assert msg.realized_pnl == 250
+        assert msg.ts == 1704067200
+
     def test_models_ignore_extra_fields(self):
         """Models ignore unknown fields (forward compatibility)."""
         msg = TickerMessage(
@@ -526,3 +574,114 @@ class TestLifecycle:
         feed = Feed(client)
         feed.stop()  # Should not raise
         assert not feed.is_connected
+
+
+class TestLatencyMetrics:
+    """Tests for feed health and latency tracking."""
+
+    def test_initial_metrics_are_none(self, client):
+        """Latency metrics start as None before any messages."""
+        feed = Feed(client)
+        assert feed.latency_ms is None
+        assert feed.uptime_seconds is None
+        assert feed.seconds_since_last_message is None
+        assert feed.messages_received == 0
+        assert feed.reconnect_count == 0
+
+    def test_message_count_increments(self, client):
+        """Message count increments on each dispatch."""
+        feed = Feed(client)
+        feed.on("ticker", lambda x: None)  # Register handler
+
+        for i in range(5):
+            raw = json.dumps({
+                "type": "ticker",
+                "msg": {"market_ticker": "TEST"}
+            })
+            feed._dispatch(raw)
+
+        assert feed.messages_received == 5
+
+    def test_last_message_time_tracked(self, client):
+        """Last message time is updated on dispatch."""
+        feed = Feed(client)
+        feed.on("ticker", lambda x: None)
+
+        assert feed._last_message_at is None
+
+        raw = json.dumps({
+            "type": "ticker",
+            "msg": {"market_ticker": "TEST"}
+        })
+        feed._dispatch(raw)
+
+        assert feed._last_message_at is not None
+        assert feed.seconds_since_last_message is not None
+        assert feed.seconds_since_last_message >= 0
+
+    def test_server_timestamp_extracted(self, client):
+        """Server timestamp is extracted from message payload."""
+        feed = Feed(client)
+        feed.on("ticker", lambda x: None)
+
+        server_ts = 1704067200000  # Example timestamp in ms
+        raw = json.dumps({
+            "type": "ticker",
+            "msg": {"market_ticker": "TEST", "ts": server_ts}
+        })
+        feed._dispatch(raw)
+
+        assert feed._last_server_ts == server_ts
+
+    def test_latency_calculated_from_timestamps(self, client):
+        """Latency is calculated when server timestamp is available."""
+        import time
+        feed = Feed(client)
+        feed.on("ticker", lambda x: None)
+
+        # Simulate message with server timestamp slightly in the past
+        now_ms = int(time.time() * 1000)
+        server_ts = now_ms - 50  # 50ms ago
+
+        raw = json.dumps({
+            "type": "ticker",
+            "msg": {"market_ticker": "TEST", "ts": server_ts}
+        })
+        feed._dispatch(raw)
+
+        # Latency should be approximately 50ms (with some tolerance for test execution)
+        assert feed.latency_ms is not None
+        assert feed.latency_ms >= 45  # Allow some tolerance
+        assert feed.latency_ms < 200  # Sanity check
+
+    def test_repr_shows_metrics(self, client):
+        """Repr includes message count and latency when available."""
+        import time
+        feed = Feed(client)
+        feed.on("ticker", lambda x: None)
+
+        # Initial repr
+        assert "msgs=0" in repr(feed)
+        assert "latency=" not in repr(feed)
+
+        # After message with timestamp
+        now_ms = int(time.time() * 1000)
+        raw = json.dumps({
+            "type": "ticker",
+            "msg": {"market_ticker": "TEST", "ts": now_ms - 25}
+        })
+        feed._dispatch(raw)
+
+        repr_str = repr(feed)
+        assert "msgs=1" in repr_str
+        assert "latency=" in repr_str
+        assert "ms" in repr_str
+
+    def test_malformed_message_still_counts(self, client):
+        """Malformed JSON still increments message count."""
+        feed = Feed(client)
+
+        feed._dispatch("not valid json {{{")
+
+        assert feed.messages_received == 1
+        assert feed._last_message_at is not None
