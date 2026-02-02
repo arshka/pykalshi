@@ -4,6 +4,7 @@ from kalshi_api.exceptions import (
     InsufficientFundsError,
     ResourceNotFoundError,
     KalshiAPIError,
+    OrderRejectedError,
 )
 
 
@@ -71,3 +72,82 @@ def test_api_error_stores_message(client, mock_response):
     assert exc_info.value.message == "Something went wrong"
     assert exc_info.value.status_code == 400
     assert exc_info.value.error_code == "bad_request"
+
+
+def test_api_error_includes_request_context(client, mock_response):
+    """Verify exceptions include request context for debugging."""
+    client._session.request.return_value = mock_response(
+        {"message": "Bad request", "code": "invalid"}, status_code=400
+    )
+    with pytest.raises(KalshiAPIError) as exc_info:
+        client.get("/markets/KXBTC")
+
+    err = exc_info.value
+    assert err.method == "GET"
+    assert err.endpoint == "/markets/KXBTC"
+    assert err.request_body is None  # GET has no body
+    assert err.response_body == {"message": "Bad request", "code": "invalid"}
+
+
+def test_post_error_includes_request_body(client, mock_response):
+    """Verify POST errors include the request body for debugging."""
+    order_data = {"ticker": "KXBTC", "action": "buy", "side": "yes", "count": 10}
+    client._session.request.return_value = mock_response(
+        {"message": "Rejected", "code": "order_rejected"}, status_code=400
+    )
+    with pytest.raises(OrderRejectedError) as exc_info:
+        client.post("/portfolio/orders", order_data)
+
+    err = exc_info.value
+    assert err.method == "POST"
+    assert err.endpoint == "/portfolio/orders"
+    assert err.request_body == order_data
+    assert err.error_code == "order_rejected"
+
+
+def test_order_rejected_error_codes(client, mock_response):
+    """Verify various order rejection codes map to OrderRejectedError."""
+    rejection_codes = [
+        "order_rejected",
+        "market_closed",
+        "market_settled",
+        "invalid_price",
+        "self_trade",
+        "post_only_rejected",
+    ]
+    for code in rejection_codes:
+        client._session.request.return_value = mock_response(
+            {"message": f"Error: {code}", "code": code}, status_code=400
+        )
+        with pytest.raises(OrderRejectedError) as exc_info:
+            client.post("/portfolio/orders", {})
+        assert exc_info.value.error_code == code
+
+
+def test_exception_repr(client, mock_response):
+    """Verify exception repr is informative."""
+    client._session.request.return_value = mock_response(
+        {"message": "Not found"}, status_code=404
+    )
+    with pytest.raises(ResourceNotFoundError) as exc_info:
+        client.get("/markets/INVALID")
+
+    err = exc_info.value
+    repr_str = repr(err)
+    assert "ResourceNotFoundError" in repr_str
+    assert "404" in repr_str
+    assert "/markets/INVALID" in repr_str
+
+
+def test_exception_str_includes_endpoint(client, mock_response):
+    """Verify exception string message includes the endpoint."""
+    client._session.request.return_value = mock_response(
+        {"message": "Auth failed"}, status_code=401
+    )
+    with pytest.raises(AuthenticationError) as exc_info:
+        client.get("/portfolio/balance")
+
+    err_str = str(exc_info.value)
+    assert "401" in err_str
+    assert "Auth failed" in err_str
+    assert "[GET /portfolio/balance]" in err_str

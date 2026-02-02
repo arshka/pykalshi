@@ -27,6 +27,7 @@ from .exceptions import (
     InsufficientFundsError,
     ResourceNotFoundError,
     RateLimitError,
+    OrderRejectedError,
 )
 from .events import Event
 from .markets import Market, Series
@@ -140,8 +141,15 @@ class KalshiClient:
             "KALSHI-ACCESS-TIMESTAMP": timestamp,
         }
 
-    def _handle_response(self, response: requests.Response) -> dict[str, Any]:
-        """Handle API response and raise custom exceptions."""
+    def _handle_response(
+        self,
+        response: requests.Response,
+        *,
+        method: str | None = None,
+        endpoint: str | None = None,
+        request_body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Handle API response and raise custom exceptions with full context."""
         status_code = int(response.status_code or 500)
 
         if status_code < 400:
@@ -151,24 +159,47 @@ class KalshiClient:
             return response.json()
 
         logger.error("Response %s: Error body: %s", status_code, response.text)
+
+        # Parse error details from response
+        response_body: dict[str, Any] | str | None = None
         try:
             error_data = response.json()
+            response_body = error_data
             message = error_data.get("message") or error_data.get(
                 "error_message", "Unknown Error"
             )
             code = error_data.get("code") or error_data.get("error_code")
         except (ValueError, requests.exceptions.JSONDecodeError):
             message = response.text
+            response_body = response.text
             code = None
 
+        # Common kwargs for all exceptions
+        context = {
+            "method": method,
+            "endpoint": endpoint,
+            "request_body": request_body,
+            "response_body": response_body,
+        }
+
+        # Map to specific exception types
         if status_code in (401, 403):
-            raise AuthenticationError(status_code, message, code)
+            raise AuthenticationError(status_code, message, code, **context)
         elif status_code == 404:
-            raise ResourceNotFoundError(status_code, message, code)
+            raise ResourceNotFoundError(status_code, message, code, **context)
         elif code in ("insufficient_funds", "insufficient_balance"):
-            raise InsufficientFundsError(status_code, message, code)
+            raise InsufficientFundsError(status_code, message, code, **context)
+        elif code in (
+            "order_rejected",
+            "market_closed",
+            "market_settled",
+            "invalid_price",
+            "self_trade",
+            "post_only_rejected",
+        ):
+            raise OrderRejectedError(status_code, message, code, **context)
         else:
-            raise KalshiAPIError(status_code, message, code)
+            raise KalshiAPIError(status_code, message, code, **context)
 
     def _request(
         self,
@@ -223,7 +254,12 @@ class KalshiClient:
                 return response
             if attempt == self.max_retries:
                 if response.status_code == 429:
-                    raise RateLimitError(429, "Rate limit exceeded after retries")
+                    raise RateLimitError(
+                        429,
+                        "Rate limit exceeded after retries",
+                        method=method,
+                        endpoint=endpoint,
+                    )
                 return response
 
             retry_after = response.headers.get("Retry-After")
@@ -245,7 +281,7 @@ class KalshiClient:
         """Make authenticated GET request."""
         logger.debug("GET %s", endpoint)
         response = self._request("GET", endpoint)
-        return self._handle_response(response)
+        return self._handle_response(response, method="GET", endpoint=endpoint)
 
     def paginated_get(
         self,
@@ -280,13 +316,15 @@ class KalshiClient:
         logger.debug("POST %s", endpoint)
         body = json.dumps(data, separators=(",", ":"))
         response = self._request("POST", endpoint, data=body)
-        return self._handle_response(response)
+        return self._handle_response(
+            response, method="POST", endpoint=endpoint, request_body=data
+        )
 
     def delete(self, endpoint: str) -> dict[str, Any]:
         """Make authenticated DELETE request."""
         logger.debug("DELETE %s", endpoint)
         response = self._request("DELETE", endpoint)
-        return self._handle_response(response)
+        return self._handle_response(response, method="DELETE", endpoint=endpoint)
 
     # --- Domain methods ---
 
