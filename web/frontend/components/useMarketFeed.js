@@ -17,6 +17,7 @@ function useMarketFeed(ticker) {
         yesBid: null,
         yesAsk: null,
     });
+    const [trades, setTrades] = useState([]);
 
     // Connection health metrics
     const [metrics, setMetrics] = useState({
@@ -161,6 +162,9 @@ function useMarketFeed(ticker) {
                         yesAsk: msg.yes_ask ?? prev.yesAsk,
                     }));
                 }
+                else if (msgType === 'trade') {
+                    setTrades(prev => [msg, ...prev].slice(0, 20));
+                }
             } catch (e) {
                 // Silently ignore malformed messages
             }
@@ -220,5 +224,5 @@ function useMarketFeed(ticker) {
         };
     }, [ticker]);
 
-    return { orderbook, connected, liveData, metrics };
+    return { orderbook, connected, liveData, metrics, trades };
 }

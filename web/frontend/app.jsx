@@ -51,6 +51,7 @@ const App = () => {
                 <MarketTerminal
                     ticker={params.ticker}
                     onBack={() => navigate(params.series ? { series: params.series } : {})}
+                    onNavigate={(target) => navigate(target)}
                 />
             ) : params.series ? (
                 <EventList

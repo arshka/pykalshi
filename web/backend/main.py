@@ -21,7 +21,7 @@ sys.path.append(os.getcwd())
 from kalshi_api.client import KalshiClient
 from kalshi_api.models import (
     MarketModel, OrderbookResponse, BalanceModel, EventModel, PositionModel, SettlementModel,
-    SubaccountBalanceModel, SubaccountTransferModel,
+    SubaccountBalanceModel, SubaccountTransferModel, TradeModel,
 )
 from kalshi_api.enums import MarketStatus, CandlestickPeriod
 from kalshi_api.exceptions import (
@@ -551,6 +551,17 @@ def get_market_history(ticker: str, period: str = "hour", limit: int = 168):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/markets/{ticker}/trades", response_model=List[TradeModel])
+def get_market_trades(ticker: str, limit: int = 20):
+    """Get recent public trades for a market."""
+    c = get_client()
+    try:
+        trades = c.get_trades(ticker=ticker, limit=limit)
+        return [t.model_dump() for t in trades]
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
 # --- WebSocket Streaming Endpoint ---
 
 # WebSocket URLs (must match feed.py)
@@ -613,12 +624,12 @@ async def market_websocket(websocket: WebSocket, ticker: str):
             ping_interval=20,
             ping_timeout=10,
         ) as kalshi_ws:
-            # Subscribe to orderbook and ticker channels
+            # Subscribe to orderbook, ticker, and trade channels
             subscribe_msg = {
                 "id": 1,
                 "cmd": "subscribe",
                 "params": {
-                    "channels": ["orderbook_delta", "ticker"],
+                    "channels": ["orderbook_delta", "ticker", "trade"],
                     "market_ticker": ticker
                 }
             }
@@ -632,7 +643,7 @@ async def market_websocket(websocket: WebSocket, ticker: str):
                     msg_type = data.get("type")
 
                     # Only forward relevant message types
-                    if msg_type in ("orderbook_snapshot", "orderbook_delta", "ticker", "subscribed", "error"):
+                    if msg_type in ("orderbook_snapshot", "orderbook_delta", "ticker", "trade", "subscribed", "error"):
                         await websocket.send_text(message)
                 except json.JSONDecodeError:
                     pass

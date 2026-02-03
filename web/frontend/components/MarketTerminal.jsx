@@ -5,13 +5,13 @@
  * - Order book (via orderbook_snapshot + orderbook_delta)
  * - Price/Volume/OI (via ticker channel)
  */
-const MarketTerminal = ({ ticker, onBack }) => {
+const MarketTerminal = ({ ticker, onBack, onNavigate }) => {
     const [market, setMarket] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     // Real-time data from WebSocket
-    const { orderbook, connected: wsConnected, liveData, metrics = {} } = useMarketFeed(ticker);
+    const { orderbook, connected: wsConnected, liveData, metrics = {}, trades: liveTrades = [] } = useMarketFeed(ticker);
 
     // Fetch initial market data
     useEffect(() => {
@@ -96,10 +96,25 @@ const MarketTerminal = ({ ticker, onBack }) => {
                                 </span>
                             )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
-                            <span className="bg-zinc-900 border border-zinc-800 px-1.5 rounded">{market.ticker}</span>
-                            <span>•</span>
-                            <span className="hidden md:inline">{market.subtitle}</span>
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-mono">
+                            {market.series_ticker && (
+                                <>
+                                    <button
+                                        onClick={() => onNavigate?.({ series: market.series_ticker })}
+                                        className="hover:text-zinc-300 transition-colors"
+                                    >
+                                        {market.series_ticker}
+                                    </button>
+                                    <span className="text-zinc-700">›</span>
+                                </>
+                            )}
+                            {market.event_ticker && (
+                                <>
+                                    <span className="text-zinc-600">{market.event_ticker}</span>
+                                    <span className="text-zinc-700">›</span>
+                                </>
+                            )}
+                            <span className="bg-zinc-900 border border-zinc-800 px-1.5 rounded text-zinc-400">{market.ticker}</span>
                         </div>
                     </div>
                 </div>
@@ -145,6 +160,11 @@ const MarketTerminal = ({ ticker, onBack }) => {
                         <SimpleChart ticker={market.ticker} />
                     </div>
 
+                    {/* Recent Trades */}
+                    <div className="mb-6">
+                        <RecentTrades ticker={market.ticker} liveTrades={liveTrades} />
+                    </div>
+
                     {/* Market Rules */}
                     <div className="bg-[#131316] p-4 rounded-xl border border-zinc-800/60 max-h-40 overflow-y-auto custom-scrollbar">
                         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 sticky top-0 bg-[#131316] pb-2">Market Rules</h3>
@@ -153,7 +173,7 @@ const MarketTerminal = ({ ticker, onBack }) => {
                 </div>
 
                 {/* Right Column - Orderbook and Trade Panel */}
-                <div className="w-[400px] flex flex-col gap-6">
+                <div className="w-[400px] flex flex-col gap-4">
                     {/* Orderbook - now receives data from WebSocket */}
                     <div className="flex-1">
                         <Orderbook book={orderbook} connected={wsConnected} />
