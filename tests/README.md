@@ -18,7 +18,7 @@ pytest tests/test_exchange.py
 pytest tests/test_exchange.py::TestExchangeStatus
 
 # Run with coverage
-pytest tests/ --cov=kalshi_api
+pytest tests/ --cov=pykalshi
 ```
 
 ## Test Structure

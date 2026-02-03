@@ -8,7 +8,7 @@ Setup:
 """
 
 import asyncio
-from kalshi_api import KalshiClient, Feed, OrderbookManager
+from pykalshi import KalshiClient, Feed, OrderbookManager
 
 # Initialize client
 client = KalshiClient()

@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
-from kalshi_api.feed import (
+from pykalshi.feed import (
     Feed,
     TickerMessage,
     OrderbookSnapshotMessage,

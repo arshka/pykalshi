@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import ANY
-from kalshi_api.enums import Action, Side, OrderStatus
+from pykalshi.enums import Action, Side, OrderStatus
 
 
 def test_get_positions_workflow(client, mock_response):
@@ -182,7 +182,7 @@ def test_get_order_by_id(client, mock_response):
 
 def test_get_order_not_found(client, mock_response):
     """Test that 404 raises ResourceNotFoundError."""
-    from kalshi_api.exceptions import ResourceNotFoundError
+    from pykalshi.exceptions import ResourceNotFoundError
 
     client._session.request.return_value = mock_response(
         {"message": "Order not found", "code": "not_found"}, status_code=404
@@ -225,8 +225,8 @@ def test_cancel_order(client, mock_response):
 
 def test_order_cancel_delegates_to_portfolio(client, mock_response):
     """Test that Order.cancel() delegates to Portfolio.cancel_order()."""
-    from kalshi_api.orders import Order
-    from kalshi_api.models import OrderModel
+    from pykalshi.orders import Order
+    from pykalshi.models import OrderModel
 
     # Initial order state
     initial_model = OrderModel(
@@ -257,8 +257,8 @@ def test_order_cancel_delegates_to_portfolio(client, mock_response):
 
 def test_order_amend(client, mock_response):
     """Test Order.amend() method."""
-    from kalshi_api.orders import Order
-    from kalshi_api.models import OrderModel
+    from pykalshi.orders import Order
+    from pykalshi.models import OrderModel
 
     initial_model = OrderModel(
         order_id="order-abc-123",
@@ -292,8 +292,8 @@ def test_order_amend(client, mock_response):
 
 def test_order_decrease(client, mock_response):
     """Test Order.decrease() method."""
-    from kalshi_api.orders import Order
-    from kalshi_api.models import OrderModel
+    from pykalshi.orders import Order
+    from pykalshi.models import OrderModel
 
     initial_model = OrderModel(
         order_id="order-abc-123",
@@ -327,8 +327,8 @@ def test_order_decrease(client, mock_response):
 
 def test_order_refresh(client, mock_response):
     """Test Order.refresh() method."""
-    from kalshi_api.orders import Order
-    from kalshi_api.models import OrderModel
+    from pykalshi.orders import Order
+    from pykalshi.models import OrderModel
 
     initial_model = OrderModel(
         order_id="order-abc-123",

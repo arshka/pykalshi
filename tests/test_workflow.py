@@ -1,7 +1,7 @@
 import pytest
 import json
 from unittest.mock import ANY
-from kalshi_api.enums import Action, Side, OrderType, OrderStatus
+from pykalshi.enums import Action, Side, OrderType, OrderStatus
 
 
 def test_user_balance_workflow(client, mock_response):

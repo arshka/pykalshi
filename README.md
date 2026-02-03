@@ -1,11 +1,11 @@
-# kalshi-api
+# pykalshi
 
 A typed Python client for the [Kalshi](https://kalshi.com) prediction markets API with WebSocket streaming, automatic retries, and ergonomic interfaces.
 
 ## Installation
 
 ```bash
-pip install kalshi-api
+pip install pykalshi
 ```
 
 Create a `.env` file with your credentials from [kalshi.com](https://kalshi.com) → Account & Security → API Keys:
@@ -18,7 +18,7 @@ KALSHI_PRIVATE_KEY_PATH=/path/to/private-key.key
 ## Quick Start
 
 ```python
-from kalshi_api import KalshiClient, Action, Side
+from pykalshi import KalshiClient, Action, Side
 
 client = KalshiClient()
 user = client.get_user()
@@ -74,7 +74,7 @@ trades = market.get_trades()
 ### Orders
 
 ```python
-from kalshi_api import Action, Side, OrderType
+from pykalshi import Action, Side, OrderType
 
 # Limit order (default)
 order = user.place_order(market, Action.BUY, Side.YES, count=10, price=50)
@@ -90,7 +90,7 @@ order.cancel()
 Subscribe to live market data via WebSocket:
 
 ```python
-from kalshi_api import Feed
+from pykalshi import Feed
 
 async def main():
     async with Feed(client) as feed:
@@ -104,7 +104,7 @@ async def main():
 ### Error Handling
 
 ```python
-from kalshi_api import InsufficientFundsError, RateLimitError, KalshiAPIError
+from pykalshi import InsufficientFundsError, RateLimitError, KalshiAPIError
 
 try:
     user.place_order(...)
@@ -118,7 +118,7 @@ except KalshiAPIError as e:
 
 ## Comparison with Official SDK
 
-| Feature | kalshi-api | kalshi-python (official) |
+| Feature | pykalshi | kalshi-python (official) |
 |---------|------------|--------------------------|
 | WebSocket streaming | ✓ | — |
 | Automatic retry with backoff | ✓ | — |

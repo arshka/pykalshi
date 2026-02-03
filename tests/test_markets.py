@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import ANY
 
-from kalshi_api import Market, Event
-from kalshi_api.enums import MarketStatus, CandlestickPeriod
+from pykalshi import Market, Event
+from pykalshi.enums import MarketStatus, CandlestickPeriod
 
 
 class TestGetMarket:
@@ -34,7 +34,7 @@ class TestGetMarket:
 
     def test_get_market_not_found(self, client, mock_response):
         """Test fetching non-existent market raises error."""
-        from kalshi_api.exceptions import ResourceNotFoundError
+        from pykalshi.exceptions import ResourceNotFoundError
 
         client._session.request.return_value = mock_response(
             {"message": "Market not found"}, status_code=404
@@ -403,7 +403,7 @@ class TestGetEvent:
 
     def test_get_event_not_found(self, client, mock_response):
         """Test fetching non-existent event raises error."""
-        from kalshi_api.exceptions import ResourceNotFoundError
+        from pykalshi.exceptions import ResourceNotFoundError
 
         client._session.request.return_value = mock_response(
             {"message": "Event not found"}, status_code=404

@@ -1,12 +1,12 @@
 # Examples
 
-Runnable examples demonstrating the `kalshi-api` library.
+Runnable examples demonstrating the `pykalshi` library.
 
 ## Setup
 
 1. Install the library:
    ```bash
-   pip install kalshi-api
+   pip install pykalshi
    ```
 
 2. Create a `.env` file with your Kalshi API credentials:

@@ -21,7 +21,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 
-from kalshi_api import (
+from pykalshi import (
     KalshiClient,
     Feed,
     TickerMessage,

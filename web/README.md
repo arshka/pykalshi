@@ -1,6 +1,6 @@
 # Kalshi Dashboard
 
-A real-time web dashboard for viewing Kalshi prediction markets. Built with FastAPI and React to demonstrate the `kalshi-api` library.
+A real-time web dashboard for viewing Kalshi prediction markets. Built with FastAPI and React to demonstrate the `pykalshi` library.
 
 ## Features
 
@@ -16,7 +16,7 @@ A real-time web dashboard for viewing Kalshi prediction markets. Built with Fast
 The web dashboard requires optional dependencies:
 
 ```bash
-pip install kalshi-api[web]
+pip install pykalshi[web]
 ```
 
 Or if installing from source:
@@ -74,4 +74,4 @@ This dashboard serves as:
 2. **Reference implementation** - Shows how to use the API in a real app
 3. **Development tool** - Useful for testing during library development
 
-The library (`kalshi_api/`) is the primary product. This dashboard demonstrates its capabilities.
+The library (`pykalshi/`) is the primary product. This dashboard demonstrates its capabilities.

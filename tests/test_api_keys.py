@@ -147,7 +147,7 @@ class TestAPIKeyDelete:
 
     def test_delete_nonexistent_key(self, client, mock_response):
         """Test deleting a non-existent key raises error."""
-        from kalshi_api.exceptions import ResourceNotFoundError
+        from pykalshi.exceptions import ResourceNotFoundError
 
         client._session.request.return_value = mock_response(
             {"message": "Key not found"}, status_code=404

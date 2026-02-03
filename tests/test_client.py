@@ -1,5 +1,5 @@
 import pytest
-from kalshi_api.exceptions import (
+from pykalshi.exceptions import (
     AuthenticationError,
     InsufficientFundsError,
     ResourceNotFoundError,

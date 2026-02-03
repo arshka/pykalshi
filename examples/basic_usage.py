@@ -8,7 +8,7 @@ Setup:
     2. Run: python examples/basic_usage.py
 """
 
-from kalshi_api import KalshiClient
+from pykalshi import KalshiClient
 
 # Initialize client (loads credentials from .env)
 client = KalshiClient()

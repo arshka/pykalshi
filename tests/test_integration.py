@@ -7,8 +7,8 @@ Run with: pytest tests/test_integration.py -v
 """
 
 import pytest
-from kalshi_api import KalshiClient
-from kalshi_api.enums import MarketStatus
+from pykalshi import KalshiClient
+from pykalshi.enums import MarketStatus
 
 
 @pytest.fixture(scope="module")

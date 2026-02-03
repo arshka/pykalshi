@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from kalshi_api import KalshiClient
+from pykalshi import KalshiClient
 
 
 @pytest.fixture
@@ -26,9 +26,9 @@ def client(mocker):
     This allows testing without real keys or API calls.
     """
     # Mock private key loading and signing to avoid file I/O and crypto
-    mocker.patch("kalshi_api.client.KalshiClient._load_private_key")
+    mocker.patch("pykalshi.client.KalshiClient._load_private_key")
     mocker.patch(
-        "kalshi_api.client.KalshiClient._sign_request",
+        "pykalshi.client.KalshiClient._sign_request",
         return_value=("1234567890", "fake_sig"),
     )
 

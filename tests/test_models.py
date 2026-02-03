@@ -1,5 +1,5 @@
 import pytest
-from kalshi_api.models import (
+from pykalshi.models import (
     BalanceModel,
     OrderModel,
     MarketModel,
@@ -13,7 +13,7 @@ from kalshi_api.models import (
     SeriesModel,
     TradeModel,
 )
-from kalshi_api.enums import Action, Side, OrderStatus
+from pykalshi.enums import Action, Side, OrderStatus
 
 
 def test_balance_model_validation():

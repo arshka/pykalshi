@@ -14,17 +14,17 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# Ensure we can import kalshi_api from project root
+# Ensure we can import pykalshi from project root
 # This assumes the server is run from the project root
 sys.path.append(os.getcwd())
 
-from kalshi_api.client import KalshiClient
-from kalshi_api.models import (
+from pykalshi.client import KalshiClient
+from pykalshi.models import (
     MarketModel, OrderbookResponse, BalanceModel, EventModel, PositionModel, SettlementModel,
     SubaccountBalanceModel, SubaccountTransferModel, TradeModel,
 )
-from kalshi_api.enums import MarketStatus, CandlestickPeriod
-from kalshi_api.exceptions import (
+from pykalshi.enums import MarketStatus, CandlestickPeriod
+from pykalshi.exceptions import (
     KalshiAPIError,
     AuthenticationError,
     ResourceNotFoundError,
@@ -68,7 +68,7 @@ from fastapi.responses import JSONResponse
 
 
 @app.exception_handler(KalshiAPIError)
-async def kalshi_api_error_handler(request: Request, exc: KalshiAPIError):
+async def pykalshi_error_handler(request: Request, exc: KalshiAPIError):
     """Convert KalshiAPIError to a JSON response with full context."""
     return JSONResponse(
         status_code=exc.status_code,

@@ -4,8 +4,8 @@ import pytest
 import json
 from unittest.mock import ANY
 
-from kalshi_api import Series
-from kalshi_api.enums import CandlestickPeriod
+from pykalshi import Series
+from pykalshi.enums import CandlestickPeriod
 
 
 class TestGetSeries:
@@ -38,7 +38,7 @@ class TestGetSeries:
 
     def test_get_series_not_found(self, client, mock_response):
         """Test fetching non-existent series raises error."""
-        from kalshi_api.exceptions import ResourceNotFoundError
+        from pykalshi.exceptions import ResourceNotFoundError
 
         client._session.request.return_value = mock_response(
             {"message": "Series not found"}, status_code=404

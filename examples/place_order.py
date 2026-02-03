@@ -8,7 +8,7 @@ Setup:
     2. Run: python examples/place_order.py
 """
 
-from kalshi_api import (
+from pykalshi import (
     KalshiClient,
     Action,
     Side,
