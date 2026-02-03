@@ -63,10 +63,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ArshKA/kalshi-api"
-Repository = "https://github.com/ArshKA/kalshi-api"
-Documentation = "https://github.com/ArshKA/kalshi-api#readme"
-Issues = "https://github.com/ArshKA/kalshi-api/issues"
+Homepage = "https://github.com/ArshKA/pykalshi"
+Repository = "https://github.com/ArshKA/pykalshi"
+Documentation = "https://github.com/ArshKA/pykalshi#readme"
+Issues = "https://github.com/ArshKA/pykalshi/issues"
 
 [build-system]
 requires = ["setuptools>=61.0"]
