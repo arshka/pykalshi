@@ -5,7 +5,24 @@ description = "A typed Python client for the Kalshi prediction markets API with 
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
-keywords = ["kalshi", "trading", "prediction-markets", "api-client", "websocket", "finance"]
+keywords = [
+    "kalshi",
+    "prediction-markets",
+    "trading",
+    "api-client",
+    "websocket",
+    "finance",
+    "betting",
+    "forecasting",
+    "elections",
+    "event-contracts",
+    "binary-options",
+    "real-time",
+    "async",
+    "pydantic",
+    "orderbook",
+    "market-data",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
