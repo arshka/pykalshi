@@ -133,6 +133,33 @@ class PositionMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class MarketLifecycleMessage(BaseModel):
+    """Market lifecycle state change (public channel).
+
+    Sent when a market's status changes (open, closed, settled, etc.).
+    """
+
+    market_ticker: str
+    status: Optional[str] = None
+    result: Optional[str] = None  # Settlement result ("yes" or "no")
+    ts: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class OrderGroupUpdateMessage(BaseModel):
+    """Order group lifecycle update (private channel).
+
+    Sent when an order group's status changes (triggered, canceled, etc.).
+    """
+
+    order_group_id: str
+    status: Optional[str] = None  # "active", "triggered", "canceled"
+    ts: Optional[int] = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
 # Type alias for orderbook messages (handlers receive either type)
 OrderbookMessage = Union[OrderbookSnapshotMessage, OrderbookDeltaMessage]
 
@@ -144,6 +171,8 @@ _MESSAGE_MODELS: dict[str, type[BaseModel]] = {
     "trade": TradeMessage,
     "fill": FillMessage,
     "market_position": PositionMessage,
+    "market_lifecycle": MarketLifecycleMessage,
+    "order_group_update": OrderGroupUpdateMessage,
 }
 
 # Maps message types to channel name for handler lookup
@@ -154,6 +183,8 @@ _TYPE_TO_CHANNEL: dict[str, str] = {
     "trade": "trade",
     "fill": "fill",
     "market_position": "market_positions",
+    "market_lifecycle": "market_lifecycle",
+    "order_group_update": "order_group_updates",
 }
 
 
@@ -198,7 +229,8 @@ class Feed:
         - "orderbook_delta": Orderbook snapshots and deltas (requires auth)
         - "fill": Your order fills (requires auth, no market filter)
         - "market_positions": Real-time position updates with P&L (requires auth, no market filter)
-        - "market_lifecycle_v2": Market state changes (public)
+        - "market_lifecycle": Market state changes (public)
+        - "order_group_updates": Order group lifecycle changes (requires auth)
     """
 
     def __init__(self, client: KalshiClient) -> None:
@@ -217,8 +249,9 @@ class Feed:
         self._cmd_id_counter = itertools.count(1)  # Thread-safe counter
         self._connected = threading.Event()
         self._lock = threading.Lock()
+        self._metrics_lock = threading.Lock()
 
-        # Latency and health tracking
+        # Latency and health tracking (protected by _metrics_lock)
         self._connected_at: Optional[float] = None
         self._last_message_at: Optional[float] = None
         self._last_server_ts: Optional[int] = None  # Server timestamp in ms
@@ -332,21 +365,23 @@ class Feed:
         Blocks briefly (up to 10s) until the initial connection is established.
         If connection fails, the feed continues retrying in the background.
         """
-        if self._running:
-            return
-        self._running = True
-        self._connected.clear()
-        self._thread = threading.Thread(
-            target=self._run, name="kalshi-feed", daemon=True
-        )
-        self._thread.start()
+        with self._lock:
+            if self._running:
+                return
+            self._running = True
+            self._connected.clear()
+            self._thread = threading.Thread(
+                target=self._run, name="kalshi-feed", daemon=True
+            )
+            self._thread.start()
         self._connected.wait(timeout=10)
 
     def stop(self) -> None:
         """Stop the feed and disconnect."""
-        if not self._running:
-            return
-        self._running = False
+        with self._lock:
+            if not self._running:
+                return
+            self._running = False
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
         if self._thread:
@@ -368,34 +403,39 @@ class Feed:
         This measures the difference between the server's timestamp and
         when we received the message locally. Assumes clocks are synchronized.
         """
-        if self._last_server_ts is None or self._last_message_at is None:
-            return None
-        local_ms = self._last_message_at * 1000
-        return local_ms - self._last_server_ts
+        with self._metrics_lock:
+            if self._last_server_ts is None or self._last_message_at is None:
+                return None
+            local_ms = self._last_message_at * 1000
+            return local_ms - self._last_server_ts
 
     @property
     def messages_received(self) -> int:
         """Total number of messages received since feed started."""
-        return self._message_count
+        with self._metrics_lock:
+            return self._message_count
 
     @property
     def uptime_seconds(self) -> Optional[float]:
         """Seconds since connection was established. None if not connected."""
-        if self._connected_at is None or not self.is_connected:
-            return None
-        return time.time() - self._connected_at
+        with self._metrics_lock:
+            if self._connected_at is None or not self.is_connected:
+                return None
+            return time.time() - self._connected_at
 
     @property
     def seconds_since_last_message(self) -> Optional[float]:
         """Seconds since last message was received. None if no messages yet."""
-        if self._last_message_at is None:
-            return None
-        return time.time() - self._last_message_at
+        with self._metrics_lock:
+            if self._last_message_at is None:
+                return None
+            return time.time() - self._last_message_at
 
     @property
     def reconnect_count(self) -> int:
         """Number of times the feed has reconnected (0 on first connection)."""
-        return self._reconnect_count
+        with self._metrics_lock:
+            return self._reconnect_count
 
     def _run(self) -> None:
         """Background thread entry point."""
@@ -434,9 +474,10 @@ class Feed:
                     backoff = 0.5  # Reset on successful connect
 
                     # Track connection time
-                    if self._connected_at is not None:
-                        self._reconnect_count += 1
-                    self._connected_at = time.time()
+                    with self._metrics_lock:
+                        if self._connected_at is not None:
+                            self._reconnect_count += 1
+                        self._connected_at = time.time()
 
                     # Replay all active subscriptions
                     with self._lock:
@@ -490,10 +531,10 @@ class Feed:
 
     def _dispatch(self, raw: str | bytes) -> None:
         """Parse incoming message and dispatch to handlers."""
-        # Record receive time for latency calculation
         receive_time = time.time()
-        self._last_message_at = receive_time
-        self._message_count += 1
+        with self._metrics_lock:
+            self._last_message_at = receive_time
+            self._message_count += 1
 
         try:
             data = json.loads(raw)
@@ -510,7 +551,8 @@ class Feed:
         if isinstance(payload, dict):
             ts = payload.get("ts")
             if ts is not None:
-                self._last_server_ts = ts
+                with self._metrics_lock:
+                    self._last_server_ts = ts
 
         # Resolve channel for handler lookup
         channel = _TYPE_TO_CHANNEL.get(msg_type, msg_type)
