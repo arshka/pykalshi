@@ -125,6 +125,10 @@ class BalanceModel(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    def _repr_html_(self) -> str:
+        from ._repr import balance_html
+        return balance_html(self)
+
 
 class PositionModel(BaseModel):
     """Pydantic model for a portfolio position."""
@@ -139,6 +143,10 @@ class PositionModel(BaseModel):
     last_updated_ts: Optional[str] = None
 
     model_config = ConfigDict(extra="ignore")
+
+    def _repr_html_(self) -> str:
+        from ._repr import position_html
+        return position_html(self)
 
 
 class FillModel(BaseModel):
@@ -160,6 +168,10 @@ class FillModel(BaseModel):
     ts: Optional[int] = None
 
     model_config = ConfigDict(extra="ignore")
+
+    def _repr_html_(self) -> str:
+        from ._repr import fill_html
+        return fill_html(self)
 
 
 class OHLCData(BaseModel):
@@ -365,6 +377,10 @@ class OrderbookResponse(BaseModel):
             return None  # Insufficient liquidity
         return cost / size
 
+    def _repr_html_(self) -> str:
+        from ._repr import orderbook_html
+        return orderbook_html(self)
+
 
 # --- Exchange Models ---
 
@@ -374,6 +390,10 @@ class ExchangeStatus(BaseModel):
     trading_active: bool
 
     model_config = ConfigDict(extra="ignore")
+
+    def _repr_html_(self) -> str:
+        from ._repr import exchange_status_html
+        return exchange_status_html(self)
 
 
 class Announcement(BaseModel):
@@ -387,6 +407,10 @@ class Announcement(BaseModel):
     status: Optional[str] = None
 
     model_config = ConfigDict(extra="ignore")
+
+    def _repr_html_(self) -> str:
+        from ._repr import announcement_html
+        return announcement_html(self)
 
 
 # --- Account Models ---
@@ -408,6 +432,10 @@ class APILimits(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    def _repr_html_(self) -> str:
+        from ._repr import api_limits_html
+        return api_limits_html(self)
+
 
 # --- API Key Models ---
 
@@ -420,6 +448,10 @@ class APIKey(BaseModel):
     scopes: Optional[list[str]] = None
 
     model_config = ConfigDict(extra="ignore")
+
+    def _repr_html_(self) -> str:
+        from ._repr import api_key_html
+        return api_key_html(self)
 
 
 class GeneratedAPIKey(BaseModel):
@@ -458,6 +490,10 @@ class TradeModel(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    def _repr_html_(self) -> str:
+        from ._repr import trade_html
+        return trade_html(self)
+
 
 class SettlementModel(BaseModel):
     """Settlement record for a resolved position."""
@@ -486,6 +522,10 @@ class SettlementModel(BaseModel):
         fee_cents = int(float(self.fee_cost or 0) * 100)
         return self.revenue - self.yes_total_cost - self.no_total_cost - fee_cents
 
+    def _repr_html_(self) -> str:
+        from ._repr import settlement_html
+        return settlement_html(self)
+
 
 class QueuePositionModel(BaseModel):
     """Order's position in the queue at its price level."""
@@ -493,6 +533,10 @@ class QueuePositionModel(BaseModel):
     queue_position: int  # 0-indexed position in queue
 
     model_config = ConfigDict(extra="ignore")
+
+    def _repr_html_(self) -> str:
+        from ._repr import queue_position_html
+        return queue_position_html(self)
 
 
 class OrderGroupModel(BaseModel):
@@ -503,6 +547,10 @@ class OrderGroupModel(BaseModel):
     created_time: Optional[str] = None
 
     model_config = ConfigDict(extra="ignore")
+
+    def _repr_html_(self) -> str:
+        from ._repr import order_group_html
+        return order_group_html(self)
 
 
 # --- Subaccount Models ---

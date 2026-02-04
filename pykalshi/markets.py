@@ -197,7 +197,24 @@ class Market:
         return hash(self.data.ticker)
 
     def __repr__(self) -> str:
-        return f"<Market {self.data.ticker}>"
+        status = self.status.value if self.status else "?"
+        parts = [f"<Market {self.ticker}", status]
+
+        # For settled markets, show result; for active, show bid/ask and last
+        if self.result:
+            parts.append(self.result.upper())
+        else:
+            bid = self.yes_bid if self.yes_bid is not None else "?"
+            ask = self.yes_ask if self.yes_ask is not None else "?"
+            parts.append(f"{bid}/{ask}")
+            if self.last_price is not None:
+                parts.append(f"last={self.last_price}")
+
+        return " | ".join(parts) + ">"
+
+    def _repr_html_(self) -> str:
+        from ._repr import market_html
+        return market_html(self)
 
 
 class Series:
@@ -231,4 +248,13 @@ class Series:
         return getattr(self.data, name)
 
     def __repr__(self) -> str:
-        return f"<Series {self.ticker}>"
+        parts = [f"<Series {self.ticker}"]
+        if self.category:
+            parts.append(self.category)
+        if self.title:
+            parts.append(self.title)
+        return " | ".join(parts) + ">"
+
+    def _repr_html_(self) -> str:
+        from ._repr import series_html
+        return series_html(self)

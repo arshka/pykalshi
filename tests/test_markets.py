@@ -362,7 +362,8 @@ class TestMarketObject:
 
         market = client.get_market("KXTEST")
 
-        assert repr(market) == "<Market KXTEST>"
+        assert "KXTEST" in repr(market)
+        assert repr(market).startswith("<Market ")
 
     def test_market_attribute_delegation(self, client, mock_response):
         """Test Market delegates unknown attributes to data."""

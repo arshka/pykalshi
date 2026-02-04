@@ -141,4 +141,13 @@ class Order:
         return hash(self.data.order_id)
 
     def __repr__(self) -> str:
-        return f"<Order {self.data.order_id} {self.data.status.value}>"
+        action = self.action.value.upper() if self.action else "?"
+        side = self.side.value.upper() if self.side else "?"
+        price = self.yes_price if self.yes_price is not None else self.no_price
+        filled = self.fill_count or 0
+        total = self.initial_count or 0
+        return f"<Order {self.ticker} | {action} {side} @{price} | {filled}/{total} | {self.status.value}>"
+
+    def _repr_html_(self) -> str:
+        from ._repr import order_html
+        return order_html(self)

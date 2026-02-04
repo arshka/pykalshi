@@ -139,7 +139,8 @@ class TestSeriesObject:
 
         series = client.get_series("TEST")
 
-        assert repr(series) == "<Series TEST>"
+        assert "TEST" in repr(series)
+        assert repr(series).startswith("<Series ")
 
     def test_series_attribute_delegation(self, client, mock_response):
         """Test that Series delegates unknown attributes to data."""

@@ -84,4 +84,13 @@ class Event:
         return hash(self.data.event_ticker)
 
     def __repr__(self) -> str:
-        return f"<Event {self.data.event_ticker}>"
+        parts = [f"<Event {self.event_ticker}"]
+        if self.title:
+            parts.append(self.title)
+        if self.mutually_exclusive:
+            parts.append("excl")
+        return " | ".join(parts) + ">"
+
+    def _repr_html_(self) -> str:
+        from ._repr import event_html
+        return event_html(self)
