@@ -383,46 +383,76 @@ class KalshiClient:
 
     def get_markets(
         self,
+        *,
+        status: MarketStatus | None = None,
+        mve_filter: str | None = None,
+        tickers: list[str] | None = None,
         series_ticker: str | None = None,
         event_ticker: str | None = None,
-        status: MarketStatus | None = None,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[Market]:
         """Search for markets.
 
         Args:
+            status: Filter by market status (open, closed, settled, etc.).
+            mve_filter: Filter multivariate/combo markets. "exclude" hides combos,
+                       "only" returns only combos.
+            tickers: List of specific market tickers to fetch.
             series_ticker: Filter by series ticker.
-            event_ticker: Filter by event ticker.
-            status: Filter by market status. Pass None for all statuses.
+            event_ticker: Filter by event ticker (supports comma-separated, max 10).
             limit: Maximum results per page (default 100, max 1000).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters (min_close_ts, max_created_ts, etc.).
+                           See https://docs.kalshi.com/api-reference/market/get-markets
         """
         params = {
             "status": status.value if status is not None else None,
-            "limit": limit,
+            "mve_filter": mve_filter,
+            "tickers": ",".join(tickers) if tickers else None,
             "series_ticker": series_ticker,
             "event_ticker": event_ticker,
+            "limit": limit,
             "cursor": cursor,
+            **extra_params,
         }
         data = self.paginated_get("/markets", "markets", params, fetch_all)
         return DataFrameList(Market(self, MarketModel.model_validate(m)) for m in data)
 
-    def get_event(self, event_ticker: str) -> Event:
-        """Get an Event by ticker."""
-        response = self.get(f"/events/{event_ticker}")
+    def get_event(
+        self,
+        event_ticker: str,
+        *,
+        with_nested_markets: bool = False,
+    ) -> Event:
+        """Get an Event by ticker.
+
+        Args:
+            event_ticker: The event ticker.
+            with_nested_markets: If True, include markets nested in the event object.
+        """
+        params = {}
+        if with_nested_markets:
+            params["with_nested_markets"] = "true"
+        endpoint = f"/events/{event_ticker}"
+        if params:
+            endpoint += "?" + "&".join(f"{k}={v}" for k, v in params.items())
+        response = self.get(endpoint)
         model = EventModel.model_validate(response["event"])
         return Event(self, model)
 
     def get_events(
         self,
+        *,
         series_ticker: str | None = None,
         status: MarketStatus | None = None,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[Event]:
         """Search for events.
 
@@ -432,28 +462,48 @@ class KalshiClient:
             limit: Maximum results per page (default 100).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters.
         """
         params = {
             "limit": limit,
             "series_ticker": series_ticker,
             "status": status.value if status is not None else None,
             "cursor": cursor,
+            **extra_params,
         }
         data = self.paginated_get("/events", "events", params, fetch_all)
         return DataFrameList(Event(self, EventModel.model_validate(e)) for e in data)
 
-    def get_series(self, series_ticker: str) -> Series:
-        """Get a Series by ticker."""
-        response = self.get(f"/series/{series_ticker}")
+    def get_series(
+        self,
+        series_ticker: str,
+        *,
+        include_volume: bool = False,
+    ) -> Series:
+        """Get a Series by ticker.
+
+        Args:
+            series_ticker: The series ticker.
+            include_volume: If True, include total volume traded across all events.
+        """
+        params = {}
+        if include_volume:
+            params["include_volume"] = "true"
+        endpoint = f"/series/{series_ticker}"
+        if params:
+            endpoint += "?" + "&".join(f"{k}={v}" for k, v in params.items())
+        response = self.get(endpoint)
         model = SeriesModel.model_validate(response["series"])
         return Series(self, model)
 
     def get_all_series(
         self,
+        *,
         category: str | None = None,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[Series]:
         """List all series.
 
@@ -462,19 +512,22 @@ class KalshiClient:
             limit: Maximum results per page (default 100).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters.
         """
-        params = {"limit": limit, "category": category, "cursor": cursor}
+        params = {"limit": limit, "category": category, "cursor": cursor, **extra_params}
         data = self.paginated_get("/series", "series", params, fetch_all)
         return DataFrameList(Series(self, SeriesModel.model_validate(s)) for s in data)
 
     def get_trades(
         self,
+        *,
         ticker: str | None = None,
         min_ts: int | None = None,
         max_ts: int | None = None,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[TradeModel]:
         """Get public trade history.
 
@@ -485,6 +538,7 @@ class KalshiClient:
             limit: Maximum trades per page (default 100).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters.
         """
         params = {
             "limit": limit,
@@ -492,6 +546,7 @@ class KalshiClient:
             "min_ts": min_ts,
             "max_ts": max_ts,
             "cursor": cursor,
+            **extra_params,
         }
         data = self.paginated_get("/markets/trades", "trades", params, fetch_all)
         return DataFrameList(TradeModel.model_validate(t) for t in data)

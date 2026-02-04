@@ -43,6 +43,8 @@ class Portfolio:
         buy_max_cost: int | None = None,
         self_trade_prevention: SelfTradePrevention | None = None,
         order_group_id: str | None = None,
+        subaccount: int | None = None,
+        cancel_order_on_pause: bool | None = None,
     ) -> Order:
         """Place an order on a market.
 
@@ -63,6 +65,8 @@ class Portfolio:
             buy_max_cost: Maximum total cost in cents. Protects against slippage.
             self_trade_prevention: Behavior on self-cross (CANCEL_TAKER or CANCEL_MAKER).
             order_group_id: Link to an order group for OCO/bracket strategies.
+            subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
+            cancel_order_on_pause: If True, cancel order if market is paused.
         """
         if yes_price is not None and no_price is not None:
             raise ValueError("Specify yes_price or no_price, not both")
@@ -99,21 +103,29 @@ class Portfolio:
             order_data["self_trade_prevention_type"] = self_trade_prevention.value
         if order_group_id is not None:
             order_data["order_group_id"] = order_group_id
+        if subaccount is not None:
+            order_data["subaccount"] = subaccount
+        if cancel_order_on_pause is not None:
+            order_data["cancel_order_on_pause"] = cancel_order_on_pause
 
         response = self._client.post("/portfolio/orders", order_data)
         model = OrderModel.model_validate(response["order"])
         return Order(self._client, model)
 
-    def cancel_order(self, order_id: str) -> Order:
+    def cancel_order(self, order_id: str, *, subaccount: int | None = None) -> Order:
         """Cancel a resting order.
 
         Args:
             order_id: ID of the order to cancel.
+            subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
 
         Returns:
             The canceled Order with updated status.
         """
-        response = self._client.delete(f"/portfolio/orders/{order_id}")
+        endpoint = f"/portfolio/orders/{order_id}"
+        if subaccount is not None:
+            endpoint += f"?subaccount={subaccount}"
+        response = self._client.delete(endpoint)
         model = OrderModel.model_validate(response["order"])
         return Order(self._client, model)
 
@@ -124,6 +136,7 @@ class Portfolio:
         count: int | None = None,
         yes_price: int | None = None,
         no_price: int | None = None,
+        subaccount: int | None = None,
     ) -> Order:
         """Amend a resting order's price or count.
 
@@ -132,6 +145,7 @@ class Portfolio:
             count: New total contract count.
             yes_price: New YES price in cents.
             no_price: New NO price in cents. Converted to yes_price internally.
+            subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
         """
         if yes_price is not None and no_price is not None:
             raise ValueError("Specify yes_price or no_price, not both")
@@ -144,8 +158,10 @@ class Portfolio:
             body["count"] = count
         if yes_price is not None:
             body["yes_price"] = yes_price
+        if subaccount is not None:
+            body["subaccount"] = subaccount
 
-        if not body:
+        if not body or (subaccount is not None and len(body) == 1):
             raise ValueError("Must specify at least one of count, yes_price, or no_price")
 
         response = self._client.post(f"/portfolio/orders/{order_id}/amend", body)
@@ -167,26 +183,40 @@ class Portfolio:
 
     def get_orders(
         self,
+        *,
         status: OrderStatus | None = None,
         ticker: str | None = None,
+        event_ticker: str | None = None,
+        min_ts: int | None = None,
+        max_ts: int | None = None,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[Order]:
         """Get list of orders.
 
         Args:
-            status: Filter by order status.
+            status: Filter by order status (resting, canceled, executed).
             ticker: Filter by market ticker.
-            limit: Maximum results per page (default 100).
+            event_ticker: Filter by event ticker (supports comma-separated, max 10).
+            min_ts: Filter orders after this Unix timestamp.
+            max_ts: Filter orders before this Unix timestamp.
+            limit: Maximum results per page (default 100, max 200).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters (e.g., subaccount).
+                           See https://docs.kalshi.com/api-reference/orders/get-orders
         """
         params = {
             "limit": limit,
             "status": status.value if status is not None else None,
             "ticker": ticker,
+            "event_ticker": event_ticker,
+            "min_ts": min_ts,
+            "max_ts": max_ts,
             "cursor": cursor,
+            **extra_params,
         }
         data = self._client.paginated_get("/portfolio/orders", "orders", params, fetch_all)
         return DataFrameList(Order(self._client, OrderModel.model_validate(d)) for d in data)
@@ -199,23 +229,26 @@ class Portfolio:
 
     def get_positions(
         self,
+        *,
         ticker: str | None = None,
         event_ticker: str | None = None,
         count_filter: str | None = None,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[PositionModel]:
         """Get portfolio positions.
 
         Args:
             ticker: Filter by specific market ticker.
-            event_ticker: Filter by event ticker.
+            event_ticker: Filter by event ticker (supports comma-separated, max 10).
             count_filter: Filter positions with non-zero values.
                          Options: "position", "total_traded", or both comma-separated.
             limit: Maximum positions per page (default 100, max 1000).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters (e.g., subaccount).
         """
         params = {
             "limit": limit,
@@ -223,12 +256,14 @@ class Portfolio:
             "event_ticker": event_ticker,
             "count_filter": count_filter,
             "cursor": cursor,
+            **extra_params,
         }
         data = self._client.paginated_get("/portfolio/positions", "market_positions", params, fetch_all)
         return DataFrameList(PositionModel.model_validate(p) for p in data)
 
     def get_fills(
         self,
+        *,
         ticker: str | None = None,
         order_id: str | None = None,
         min_ts: int | None = None,
@@ -236,6 +271,7 @@ class Portfolio:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[FillModel]:
         """Get trade fills (executed trades).
 
@@ -247,6 +283,7 @@ class Portfolio:
             limit: Maximum fills per page (default 100, max 200).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters (e.g., subaccount).
         """
         params = {
             "limit": limit,
@@ -255,6 +292,7 @@ class Portfolio:
             "min_ts": min_ts,
             "max_ts": max_ts,
             "cursor": cursor,
+            **extra_params,
         }
         data = self._client.paginated_get("/portfolio/fills", "fills", params, fetch_all)
         return DataFrameList(FillModel.model_validate(f) for f in data)
@@ -323,11 +361,13 @@ class Portfolio:
 
     def get_settlements(
         self,
+        *,
         ticker: str | None = None,
         event_ticker: str | None = None,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[SettlementModel]:
         """Get settlement records for resolved positions.
 
@@ -337,12 +377,14 @@ class Portfolio:
             limit: Maximum settlements per page (default 100).
             cursor: Pagination cursor.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters.
         """
         params = {
             "limit": limit,
             "ticker": ticker,
             "event_ticker": event_ticker,
             "cursor": cursor,
+            **extra_params,
         }
         data = self._client.paginated_get("/portfolio/settlements", "settlements", params, fetch_all)
         return DataFrameList(SettlementModel.model_validate(s) for s in data)
@@ -403,9 +445,11 @@ class Portfolio:
 
     def get_order_groups(
         self,
+        *,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[OrderGroupModel]:
         """List all order groups.
 
@@ -413,8 +457,9 @@ class Portfolio:
             limit: Maximum results per page (default 100).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters.
         """
-        params = {"limit": limit, "cursor": cursor}
+        params = {"limit": limit, "cursor": cursor, **extra_params}
         data = self._client.paginated_get(
             "/portfolio/order_groups", "order_groups", params, fetch_all
         )
@@ -503,9 +548,11 @@ class Portfolio:
 
     def get_subaccount_transfers(
         self,
+        *,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
+        **extra_params,
     ) -> DataFrameList[SubaccountTransferModel]:
         """Get transfer history between subaccounts.
 
@@ -513,8 +560,9 @@ class Portfolio:
             limit: Maximum results per page (default 100).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
+            **extra_params: Additional API parameters.
         """
-        params = {"limit": limit, "cursor": cursor}
+        params = {"limit": limit, "cursor": cursor, **extra_params}
         data = self._client.paginated_get(
             "/portfolio/subaccounts/transfers", "transfers", params, fetch_all
         )

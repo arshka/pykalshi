@@ -122,9 +122,16 @@ class Market:
             )
             return None
 
-    def get_orderbook(self) -> OrderbookResponse:
-        """Get the orderbook for this market."""
-        response = self._client.get(f"/markets/{self.data.ticker}/orderbook")
+    def get_orderbook(self, *, depth: int | None = None) -> OrderbookResponse:
+        """Get the orderbook for this market.
+
+        Args:
+            depth: Number of price levels to return (0-100). 0 or None returns all levels.
+        """
+        endpoint = f"/markets/{self.data.ticker}/orderbook"
+        if depth is not None:
+            endpoint += f"?depth={depth}"
+        response = self._client.get(endpoint)
         return OrderbookResponse.model_validate(response)
 
     def get_candlesticks(
