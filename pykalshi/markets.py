@@ -126,10 +126,10 @@ class Market:
         """Get the orderbook for this market.
 
         Args:
-            depth: Number of price levels to return (0-100). 0 or None returns all levels.
+            depth: Number of price levels to return (1-100). None returns all levels.
         """
         endpoint = f"/markets/{self.data.ticker}/orderbook"
-        if depth is not None:
+        if depth:
             endpoint += f"?depth={depth}"
         response = self._client.get(endpoint)
         return OrderbookResponse.model_validate(response)

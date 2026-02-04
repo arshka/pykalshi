@@ -100,7 +100,7 @@ class RateLimiter:
                 self._timestamps.popleft()
 
             # If at capacity, wait for oldest to expire
-            while len(self._timestamps) >= self.requests_per_second:
+            while len(self._timestamps) >= self.burst:
                 oldest = self._timestamps[0]
                 sleep_time = oldest + self._window_size - now
                 if sleep_time > 0:

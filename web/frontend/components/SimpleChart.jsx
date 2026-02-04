@@ -79,7 +79,7 @@ const SimpleChart = ({ ticker }) => {
     const maxVolume = Math.max(...volumes) || 1;
     const volumeHeight = height * 0.25;
 
-    const getX = (i) => (i / (data.length - 1)) * width;
+    const getX = (i) => (i / Math.max(1, data.length - 1)) * width;
     const getY = (p) => (height - volumeHeight) - ((p - domainMin) / priceRange) * (height - volumeHeight - 20);
 
     const points = data.map((d, i) => `${getX(i)},${getY(d.price)}`).join(' ');

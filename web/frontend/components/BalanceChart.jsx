@@ -73,7 +73,7 @@ const BalanceChart = () => {
     const range = maxVal - minVal || 1;
     const buffer = range * 0.1;
 
-    const getX = (i) => padding.left + (i / (data.length - 1)) * (width - padding.left - padding.right);
+    const getX = (i) => padding.left + (i / Math.max(1, data.length - 1)) * (width - padding.left - padding.right);
     const getY = (v) => padding.top + ((maxVal + buffer - v) / (range + buffer * 2)) * (height - padding.top - padding.bottom);
 
     const points = data.map((d, i) => `${getX(i)},${getY(d.pnl)}`).join(' ');

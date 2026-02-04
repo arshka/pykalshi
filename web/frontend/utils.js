@@ -7,12 +7,12 @@ const formatPrice = (cents) => {
 };
 
 const formatDollar = (cents) => {
-    if (!cents) return '$0.00';
+    if (cents == null) return '-';
     return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const formatNumber = (num) => {
-    if (!num) return '0';
+    if (num == null) return '-';
     return num.toLocaleString();
 };
 

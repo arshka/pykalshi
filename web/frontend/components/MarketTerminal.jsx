@@ -42,7 +42,7 @@ const MarketTerminal = ({ ticker, onBack, onNavigate }) => {
     const displayVolume = liveData.volume ?? market?.volume_24h;
     const displayOI = liveData.openInterest ?? market?.open_interest;
     const displayYesAsk = liveData.yesAsk ?? market?.yes_ask;
-    const displayNoBid = liveData.yesBid ? (100 - liveData.yesBid) : market?.no_ask;
+    const displayNoBid = liveData.yesBid != null ? (100 - liveData.yesBid) : market?.no_ask;
 
     if (loading) return (
         <div className="h-screen bg-[#0e0e10] flex items-center justify-center flex-col">

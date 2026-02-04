@@ -208,7 +208,7 @@ def _orderbook_to_df(response: Any, pd) -> pd.DataFrame:
         # Sort: yes side first, then by price descending
         df = df.sort_values(
             ['side', 'price'],
-            ascending=[True, False]
+            ascending=[False, False]
         ).reset_index(drop=True)
 
     return df
