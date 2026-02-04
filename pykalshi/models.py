@@ -225,6 +225,18 @@ class CandlestickResponse(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    def to_dataframe(self):
+        """Convert candlesticks to a pandas DataFrame.
+
+        Requires pandas: pip install pykalshi[dataframe]
+
+        Returns:
+            DataFrame with columns: ticker, end_period_ts, timestamp,
+            volume, open_interest, open, high, low, close, mean.
+        """
+        from .dataframe import to_dataframe
+        return to_dataframe(self)
+
 
 # Orderbook Models
 class OrderbookLevel(BaseModel):
@@ -376,6 +388,18 @@ class OrderbookResponse(BaseModel):
         if remaining > 0:
             return None  # Insufficient liquidity
         return cost / size
+
+    def to_dataframe(self):
+        """Convert orderbook to a pandas DataFrame with price levels.
+
+        Requires pandas: pip install pykalshi[dataframe]
+
+        Returns:
+            DataFrame with columns: side, price, quantity.
+            Sorted by side (yes first), then price descending.
+        """
+        from .dataframe import to_dataframe
+        return to_dataframe(self)
 
     def _repr_html_(self) -> str:
         from ._repr import orderbook_html

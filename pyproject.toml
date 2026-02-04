@@ -1,6 +1,6 @@
 [project]
 name = "pykalshi"
-version = "0.2.1"
+version = "0.3.0"
 description = "A typed Python client for the Kalshi prediction markets API with WebSocket streaming, automatic retries, and ergonomic interfaces"
 readme = "README.md"
 license = {text = "MIT"}
@@ -48,6 +48,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dataframe = [
+    "pandas>=1.5.0",
+]
 web = [
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",

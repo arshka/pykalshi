@@ -4,6 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from .models import MarketModel, CandlestickResponse, OrderbookResponse, SeriesModel, TradeModel
+from .dataframe import DataFrameList
 from .enums import CandlestickPeriod, MarketStatus
 
 if TYPE_CHECKING:
@@ -155,7 +156,7 @@ class Market:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[TradeModel]:
+    ) -> DataFrameList[TradeModel]:
         """Get public trade history for this market.
 
         Args:
@@ -236,11 +237,11 @@ class Series:
     def category(self) -> str | None:
         return self.data.category
 
-    def get_markets(self, **kwargs) -> list[Market]:
+    def get_markets(self, **kwargs) -> DataFrameList[Market]:
         """Get all markets in this series."""
         return self._client.get_markets(series_ticker=self.ticker, **kwargs)
 
-    def get_events(self, **kwargs) -> list[Event]:
+    def get_events(self, **kwargs) -> DataFrameList[Event]:
         """Get all events in this series."""
         return self._client.get_events(series_ticker=self.ticker, **kwargs)
 

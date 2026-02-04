@@ -32,6 +32,7 @@ from .exceptions import (
 from .events import Event
 from .markets import Market, Series
 from .models import MarketModel, EventModel, SeriesModel, TradeModel, CandlestickResponse
+from .dataframe import DataFrameList
 from .portfolio import Portfolio
 from .enums import MarketStatus, CandlestickPeriod
 from .feed import Feed
@@ -388,7 +389,7 @@ class KalshiClient:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[Market]:
+    ) -> DataFrameList[Market]:
         """Search for markets.
 
         Args:
@@ -407,7 +408,7 @@ class KalshiClient:
             "cursor": cursor,
         }
         data = self.paginated_get("/markets", "markets", params, fetch_all)
-        return [Market(self, MarketModel.model_validate(m)) for m in data]
+        return DataFrameList(Market(self, MarketModel.model_validate(m)) for m in data)
 
     def get_event(self, event_ticker: str) -> Event:
         """Get an Event by ticker."""
@@ -422,7 +423,7 @@ class KalshiClient:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[Event]:
+    ) -> DataFrameList[Event]:
         """Search for events.
 
         Args:
@@ -439,7 +440,7 @@ class KalshiClient:
             "cursor": cursor,
         }
         data = self.paginated_get("/events", "events", params, fetch_all)
-        return [Event(self, EventModel.model_validate(e)) for e in data]
+        return DataFrameList(Event(self, EventModel.model_validate(e)) for e in data)
 
     def get_series(self, series_ticker: str) -> Series:
         """Get a Series by ticker."""
@@ -453,7 +454,7 @@ class KalshiClient:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[Series]:
+    ) -> DataFrameList[Series]:
         """List all series.
 
         Args:
@@ -464,7 +465,7 @@ class KalshiClient:
         """
         params = {"limit": limit, "category": category, "cursor": cursor}
         data = self.paginated_get("/series", "series", params, fetch_all)
-        return [Series(self, SeriesModel.model_validate(s)) for s in data]
+        return DataFrameList(Series(self, SeriesModel.model_validate(s)) for s in data)
 
     def get_trades(
         self,
@@ -474,7 +475,7 @@ class KalshiClient:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[TradeModel]:
+    ) -> DataFrameList[TradeModel]:
         """Get public trade history.
 
         Args:
@@ -493,7 +494,7 @@ class KalshiClient:
             "cursor": cursor,
         }
         data = self.paginated_get("/markets/trades", "trades", params, fetch_all)
-        return [TradeModel.model_validate(t) for t in data]
+        return DataFrameList(TradeModel.model_validate(t) for t in data)
 
     def get_candlesticks_batch(
         self,

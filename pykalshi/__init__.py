@@ -61,6 +61,7 @@ from .models import (
 )
 from .orderbook import OrderbookManager
 from .rate_limiter import RateLimiter, NoOpRateLimiter
+from .dataframe import to_dataframe, DataFrameList
 from .exceptions import (
     KalshiError,
     KalshiAPIError,
@@ -129,6 +130,8 @@ __all__ = [
     "OrderbookManager",
     "RateLimiter",
     "NoOpRateLimiter",
+    "to_dataframe",
+    "DataFrameList",
     # Subaccount Models
     "SubaccountModel",
     "SubaccountBalanceModel",

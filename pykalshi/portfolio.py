@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from .orders import Order
 from .enums import Action, Side, OrderType, OrderStatus, TimeInForce, SelfTradePrevention
+from .dataframe import DataFrameList
 from .models import (
     OrderModel, BalanceModel, PositionModel, FillModel,
     SettlementModel, QueuePositionModel, OrderGroupModel,
@@ -171,7 +172,7 @@ class Portfolio:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[Order]:
+    ) -> DataFrameList[Order]:
         """Get list of orders.
 
         Args:
@@ -188,7 +189,7 @@ class Portfolio:
             "cursor": cursor,
         }
         data = self._client.paginated_get("/portfolio/orders", "orders", params, fetch_all)
-        return [Order(self._client, OrderModel.model_validate(d)) for d in data]
+        return DataFrameList(Order(self._client, OrderModel.model_validate(d)) for d in data)
 
     def get_order(self, order_id: str) -> Order:
         """Get a single order by ID."""
@@ -204,7 +205,7 @@ class Portfolio:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[PositionModel]:
+    ) -> DataFrameList[PositionModel]:
         """Get portfolio positions.
 
         Args:
@@ -224,7 +225,7 @@ class Portfolio:
             "cursor": cursor,
         }
         data = self._client.paginated_get("/portfolio/positions", "market_positions", params, fetch_all)
-        return [PositionModel.model_validate(p) for p in data]
+        return DataFrameList(PositionModel.model_validate(p) for p in data)
 
     def get_fills(
         self,
@@ -235,7 +236,7 @@ class Portfolio:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[FillModel]:
+    ) -> DataFrameList[FillModel]:
         """Get trade fills (executed trades).
 
         Args:
@@ -256,19 +257,16 @@ class Portfolio:
             "cursor": cursor,
         }
         data = self._client.paginated_get("/portfolio/fills", "fills", params, fetch_all)
-        return [FillModel.model_validate(f) for f in data]
+        return DataFrameList(FillModel.model_validate(f) for f in data)
 
     # --- Batch Operations ---
 
-    def batch_place_orders(self, orders: list[dict]) -> list[Order]:
+    def batch_place_orders(self, orders: list[dict]) -> DataFrameList[Order]:
         """Place multiple orders atomically.
 
         Args:
             orders: List of order dicts with keys: ticker, action, side, count,
                     type, yes_price/no_price, and optional advanced params.
-
-        Returns:
-            List of created Order objects.
 
         Example:
             orders = [
@@ -278,22 +276,19 @@ class Portfolio:
             results = portfolio.batch_place_orders(orders)
         """
         response = self._client.post("/portfolio/orders/batched", {"orders": orders})
-        return [Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", [])]
+        return DataFrameList(Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", []))
 
-    def batch_cancel_orders(self, order_ids: list[str]) -> list[Order]:
+    def batch_cancel_orders(self, order_ids: list[str]) -> DataFrameList[Order]:
         """Cancel multiple orders atomically.
 
         Args:
             order_ids: List of order IDs to cancel.
-
-        Returns:
-            List of canceled Order objects.
         """
         response = self._client.post(
             "/portfolio/orders/batched/cancel",
             {"order_ids": order_ids}
         )
-        return [Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", [])]
+        return DataFrameList(Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", []))
 
     # --- Queue Position ---
 
@@ -309,23 +304,20 @@ class Portfolio:
             queue_position=response.get("queue_position", 0)
         )
 
-    def get_queue_positions(self, order_ids: list[str]) -> list[QueuePositionModel]:
+    def get_queue_positions(self, order_ids: list[str]) -> DataFrameList[QueuePositionModel]:
         """Get queue positions for multiple resting orders.
 
         Args:
             order_ids: List of order IDs.
-
-        Returns:
-            List of QueuePositionModel objects.
         """
         response = self._client.post(
             "/portfolio/orders/queue_positions",
             {"order_ids": order_ids}
         )
-        return [
+        return DataFrameList(
             QueuePositionModel.model_validate(qp)
             for qp in response.get("queue_positions", [])
-        ]
+        )
 
     # --- Settlements ---
 
@@ -336,7 +328,7 @@ class Portfolio:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[SettlementModel]:
+    ) -> DataFrameList[SettlementModel]:
         """Get settlement records for resolved positions.
 
         Args:
@@ -345,9 +337,6 @@ class Portfolio:
             limit: Maximum settlements per page (default 100).
             cursor: Pagination cursor.
             fetch_all: If True, automatically fetch all pages.
-
-        Returns:
-            List of settlement records showing resolution outcomes.
         """
         params = {
             "limit": limit,
@@ -356,7 +345,7 @@ class Portfolio:
             "cursor": cursor,
         }
         data = self._client.paginated_get("/portfolio/settlements", "settlements", params, fetch_all)
-        return [SettlementModel.model_validate(s) for s in data]
+        return DataFrameList(SettlementModel.model_validate(s) for s in data)
 
     def get_resting_order_value(self) -> int:
         """Get total value of all resting orders in cents.
@@ -417,22 +406,19 @@ class Portfolio:
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[OrderGroupModel]:
+    ) -> DataFrameList[OrderGroupModel]:
         """List all order groups.
 
         Args:
             limit: Maximum results per page (default 100).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
-
-        Returns:
-            List of OrderGroupModel objects.
         """
         params = {"limit": limit, "cursor": cursor}
         data = self._client.paginated_get(
             "/portfolio/order_groups", "order_groups", params, fetch_all
         )
-        return [OrderGroupModel.model_validate(og) for og in data]
+        return DataFrameList(OrderGroupModel.model_validate(og) for og in data)
 
     def reset_order_group(self, order_group_id: str) -> OrderGroupModel:
         """Reset matched contract counter for an order group.
@@ -507,36 +493,29 @@ class Portfolio:
         response = self._client.post("/portfolio/subaccounts/transfer", body)
         return SubaccountTransferModel.model_validate(response.get("transfer", response))
 
-    def get_subaccount_balances(self) -> list[SubaccountBalanceModel]:
-        """Get balances for all subaccounts.
-
-        Returns:
-            List of SubaccountBalanceModel with balance per subaccount.
-        """
+    def get_subaccount_balances(self) -> DataFrameList[SubaccountBalanceModel]:
+        """Get balances for all subaccounts."""
         response = self._client.get("/portfolio/subaccounts/balances")
-        return [
+        return DataFrameList(
             SubaccountBalanceModel.model_validate(b)
             for b in response.get("balances", [])
-        ]
+        )
 
     def get_subaccount_transfers(
         self,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
-    ) -> list[SubaccountTransferModel]:
+    ) -> DataFrameList[SubaccountTransferModel]:
         """Get transfer history between subaccounts.
 
         Args:
             limit: Maximum results per page (default 100).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
-
-        Returns:
-            List of transfer records.
         """
         params = {"limit": limit, "cursor": cursor}
         data = self._client.paginated_get(
             "/portfolio/subaccounts/transfers", "transfers", params, fetch_all
         )
-        return [SubaccountTransferModel.model_validate(t) for t in data]
+        return DataFrameList(SubaccountTransferModel.model_validate(t) for t in data)

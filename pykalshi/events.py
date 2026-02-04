@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from .models import EventModel, ForecastPercentileHistory
+from .dataframe import DataFrameList
 
 if TYPE_CHECKING:
     from .client import KalshiClient
@@ -45,7 +46,7 @@ class Event:
 
     # --- Domain logic ---
 
-    def get_markets(self) -> list[Market]:
+    def get_markets(self) -> DataFrameList[Market]:
         """Get all markets for this event."""
         return self._client.get_markets(event_ticker=self.data.event_ticker)
 
