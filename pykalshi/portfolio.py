@@ -365,16 +365,34 @@ class Portfolio:
             queue_position=response.get("queue_position", 0)
         )
 
-    def get_queue_positions(self, order_ids: list[str]) -> DataFrameList[QueuePositionModel]:
-        """Get queue positions for multiple resting orders.
+    def get_queue_positions(
+        self,
+        *,
+        market_tickers: list[str] | None = None,
+        event_ticker: str | None = None,
+    ) -> DataFrameList[QueuePositionModel]:
+        """Get queue positions for all resting orders.
+
+        Queue position represents the number of contracts that need to be
+        matched before an order receives a partial or full match.
 
         Args:
-            order_ids: List of order IDs.
+            market_tickers: Filter by market tickers (optional).
+            event_ticker: Filter by event ticker (optional).
         """
-        response = self._client.post(
-            "/portfolio/orders/queue_positions",
-            {"order_ids": order_ids}
-        )
+        from urllib.parse import urlencode
+
+        params: dict = {}
+        if market_tickers:
+            params["market_tickers"] = ",".join(market_tickers)
+        if event_ticker:
+            params["event_ticker"] = event_ticker
+
+        endpoint = "/portfolio/orders/queue_positions"
+        if params:
+            endpoint = f"{endpoint}?{urlencode(params)}"
+
+        response = self._client.get(endpoint)
         return DataFrameList(
             QueuePositionModel.model_validate(qp)
             for qp in response.get("queue_positions", [])
@@ -449,7 +467,7 @@ class Portfolio:
         if max_loss is not None:
             body["max_loss"] = max_loss
 
-        response = self._client.post("/portfolio/order_groups", body)
+        response = self._client.post("/portfolio/order_groups/create", body)
         return OrderGroupModel.model_validate(response.get("order_group", response))
 
     def get_order_group(self, order_group_id: str) -> OrderGroupModel:

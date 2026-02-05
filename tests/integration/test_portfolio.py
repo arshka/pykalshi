@@ -66,7 +66,7 @@ class TestOrderGroups:
 
         assert isinstance(groups, list)
 
-    @pytest.mark.skip(reason="Order groups endpoint not available on demo API")
+    @pytest.mark.skip(reason="Order group API has different purpose - needs reimplementation")
     def test_order_group_lifecycle(self, client):
         """Full lifecycle: create, get, update, reset, delete order group."""
         from pykalshi.enums import MarketStatus
@@ -462,9 +462,8 @@ class TestOrderMutations:
         # Cleanup
         order.cancel()
 
-    @pytest.mark.skip(reason="Batch queue positions endpoint not available on demo API")
     def test_get_queue_positions_multiple(self, client, market_for_orders):
-        """Get queue positions for multiple orders."""
+        """Get queue positions for all resting orders (filtered by market)."""
         market = market_for_orders
 
         # Place 2 orders
@@ -481,18 +480,27 @@ class TestOrderMutations:
 
         order_ids = [o.order_id for o in orders]
 
-        # Get queue positions
-        queue_positions = client.portfolio.get_queue_positions(order_ids)
+        try:
+            # Get queue positions filtered by market ticker
+            queue_positions = client.portfolio.get_queue_positions(
+                market_tickers=[market.ticker]
+            )
 
-        assert isinstance(queue_positions, list)
-        assert len(queue_positions) == 2
+            assert isinstance(queue_positions, list)
+            # Should have at least our 2 orders
+            assert len(queue_positions) >= 2
 
-        for qp in queue_positions:
-            assert qp.order_id in order_ids
-            assert isinstance(qp.queue_position, int)
+            returned_order_ids = [qp.order_id for qp in queue_positions]
+            for oid in order_ids:
+                assert oid in returned_order_ids
 
-        # Cleanup
-        client.portfolio.batch_cancel_orders(order_ids)
+            # Verify queue_position is an int
+            for qp in queue_positions:
+                assert isinstance(qp.queue_position, int)
+        finally:
+            # Cleanup
+            for order in orders:
+                order.cancel()
 
     def test_order_wait_until_terminal(self, client, market_for_orders):
         """Test Order.wait_until_terminal() by cancelling an order."""
