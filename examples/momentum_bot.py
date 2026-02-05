@@ -16,7 +16,7 @@ WARNING: This bot places REAL orders when not in demo mode.
          Always test with demo=True first.
 """
 
-import asyncio
+import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
@@ -51,7 +51,7 @@ class MomentumBot:
 
     def __init__(self, config: BotConfig):
         self.config = config
-        self.client = KalshiClient(demo=config.demo)
+        self.client = KalshiClient.from_env(demo=config.demo)
         self.portfolio = self.client.portfolio
 
         # Price tracking
@@ -137,64 +137,76 @@ class MomentumBot:
             self.log(f"Max position reached ({self.config.max_position}), skipping entry")
             return
 
-        try:
-            order = self.portfolio.place_order(
-                self.config.ticker,
-                action=Action.BUY,
-                side=side,
-                count=self.config.position_size,
-                order_type=OrderType.MARKET,
-            )
+        # NOTE: Order placement commented out for testing
+        # try:
+        #     order = self.portfolio.place_order(
+        #         self.config.ticker,
+        #         action=Action.BUY,
+        #         side=side,
+        #         count=self.config.position_size,
+        #         order_type=OrderType.MARKET,
+        #     )
+        # except InsufficientFundsError:
+        #     self.log("Insufficient funds for entry")
+        #     return
+        # except Exception as e:
+        #     self.log(f"Entry failed: {e}")
+        #     return
 
-            self.position = self.config.position_size if side == Side.YES else -self.config.position_size
-            self.entry_price = price
-            self.trades += 1
+        self.position = self.config.position_size if side == Side.YES else -self.config.position_size
+        self.entry_price = price
+        self.trades += 1
 
-            self.log(f"ENTRY: {side.value} {self.config.position_size}x @ ~{price}¢")
-
-        except InsufficientFundsError:
-            self.log("Insufficient funds for entry")
-        except Exception as e:
-            self.log(f"Entry failed: {e}")
+        self.log(f"ENTRY: {side.value} {self.config.position_size}x @ ~{price}¢ [SIMULATED]")
 
     def exit_position(self, price: int):
         """Exit current position."""
         if self.position == 0:
             return
 
-        try:
-            # To exit: sell what we bought
+        # To exit: sell what we bought
+        if self.position > 0:
+            side = Side.YES
+            count = self.position
+        else:
+            side = Side.NO
+            count = abs(self.position)
+
+        # NOTE: Order placement commented out for testing
+        # try:
+        #     order = self.portfolio.place_order(
+        #         self.config.ticker,
+        #         action=Action.SELL,
+        #         side=side,
+        #         count=count,
+        #         order_type=OrderType.MARKET,
+        #     )
+        # except Exception as e:
+        #     self.log(f"Exit failed: {e}")
+        #     return
+
+        # Calculate P&L
+        if self.entry_price:
             if self.position > 0:
-                side = Side.YES
-                count = self.position
+                trade_pnl = (price - self.entry_price) * count
             else:
-                side = Side.NO
-                count = abs(self.position)
+                trade_pnl = (self.entry_price - price) * count
+            self.pnl += trade_pnl
+            self.log(f"EXIT: {side.value} {count}x @ ~{price}¢ (P&L: {trade_pnl:+}¢, Total: {self.pnl:+}¢) [SIMULATED]")
 
-            order = self.portfolio.place_order(
-                self.config.ticker,
-                action=Action.SELL,
-                side=side,
-                count=count,
-                order_type=OrderType.MARKET,
-            )
+        self.position = 0
+        self.entry_price = None
 
-            # Calculate P&L
-            if self.entry_price:
-                if self.position > 0:
-                    trade_pnl = (price - self.entry_price) * count
-                else:
-                    trade_pnl = (self.entry_price - price) * count
-                self.pnl += trade_pnl
-                self.log(f"EXIT: {side.value} {count}x @ ~{price}¢ (P&L: {trade_pnl:+}¢, Total: {self.pnl:+}¢)")
+    def handle_ticker(self, msg: TickerMessage):
+        """Handle incoming ticker message."""
+        if msg.price is not None:
+            self.on_price_update(msg.price)
 
-            self.position = 0
-            self.entry_price = None
+            # Status line
+            pos_str = f"POS: {self.position:+}" if self.position else "POS: flat"
+            print(f"  Price: {msg.price}¢ | {pos_str} | Trades: {self.trades} | P&L: {self.pnl:+}¢", end="\r")
 
-        except Exception as e:
-            self.log(f"Exit failed: {e}")
-
-    async def run(self):
+    def run(self):
         """Main bot loop - stream prices and trade."""
         env = "DEMO" if self.config.demo else "LIVE"
         self.log(f"Starting momentum bot [{env}]")
@@ -207,24 +219,26 @@ class MomentumBot:
         balance = self.portfolio.get_balance()
         self.log(f"Balance: ${balance.balance / 100:.2f}")
 
-        async with Feed(self.client) as feed:
-            await feed.subscribe_ticker(self.config.ticker)
+        with Feed(self.client) as feed:
+            # Register handler
+            feed.on("ticker", self.handle_ticker)
+
+            # Subscribe to market
+            feed.subscribe("ticker", market_ticker=self.config.ticker)
             self.log(f"Subscribed to {self.config.ticker}")
             self.log("Waiting for price updates...\n")
 
-            async for msg in feed:
-                if isinstance(msg, TickerMessage):
-                    if msg.price is not None:
-                        self.on_price_update(msg.price)
-
-                        # Status line
-                        pos_str = f"POS: {self.position:+}" if self.position else "POS: flat"
-                        print(f"  Price: {msg.price}¢ | {pos_str} | Trades: {self.trades} | P&L: {self.pnl:+}¢", end="\r")
+            # Run until interrupted
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print(f"\n\nBot stopped. Total P&L: {self.pnl:+}¢ over {self.trades} trades")
 
 
-async def main():
+def main():
     # Find an active market to trade
-    client = KalshiClient(demo=True)
+    client = KalshiClient.from_env(demo=True)
     markets = client.get_markets(status=MarketStatus.OPEN, limit=10)
 
     if not markets:
@@ -248,12 +262,8 @@ async def main():
     )
 
     bot = MomentumBot(config)
-
-    try:
-        await bot.run()
-    except KeyboardInterrupt:
-        print(f"\n\nBot stopped. Total P&L: {bot.pnl:+}¢ over {bot.trades} trades")
+    bot.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

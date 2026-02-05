@@ -39,7 +39,26 @@ python examples/place_order.py
 For testing without real money, use Kalshi's demo environment:
 
 ```python
-client = KalshiClient(demo=True)
+client = KalshiClient.from_env(demo=True)
 ```
 
-The demo environment has separate credentials - create them at [demo.kalshi.com](https://demo.kalshi.com).
+### Quick Start with Included Demo Credentials
+
+Demo credentials are included in the repo for easy testing:
+
+```bash
+# Copy demo credentials to .env
+cp .env.demo .env
+
+# Run any example
+python examples/basic_usage.py
+```
+
+### Using Your Own Demo Credentials
+
+Create your own at [demo.kalshi.com](https://demo.kalshi.com), then set up `.env`:
+
+```
+KALSHI_API_KEY_ID=your-demo-key-id
+KALSHI_PRIVATE_KEY_PATH=/path/to/demo-private-key.pem
+```

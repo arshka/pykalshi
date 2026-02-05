@@ -19,8 +19,8 @@ from pykalshi import (
     OrderRejectedError,
 )
 
-# Use demo environment for testing
-client = KalshiClient(demo=True)
+# Use demo environment for testing (loads credentials from .env)
+client = KalshiClient.from_env(demo=True)
 portfolio = client.portfolio
 
 # Check balance first
@@ -81,8 +81,8 @@ orders = portfolio.get_orders(status=OrderStatus.RESTING)
 print(f"\nYou have {len(orders)} open orders")
 
 for order in orders[:3]:
-    print(f"  {order.order_id}: {order.action} {order.count}x {order.ticker} @ {order.yes_price}¢")
-    print(f"    Status: {order.status}, Filled: {order.count - order.remaining_count}")
+    print(f"  {order.order_id}: {order.action} {order.initial_count}x {order.ticker} @ {order.yes_price}¢")
+    print(f"    Status: {order.status}, Filled: {order.fill_count}")
 
 # Cancel an order (uncomment to execute)
 # if orders:
@@ -90,11 +90,11 @@ for order in orders[:3]:
 #     order.cancel()
 #     print(f"Cancelled order {order.order_id}")
 
-# Modify an order (uncomment to execute)
+# Amend an order (uncomment to execute)
 # if orders:
 #     order = orders[0]
-#     modified = order.modify(yes_price=50, count=20)
-#     print(f"Modified order: new price {modified.yes_price}¢, new count {modified.count}")
+#     modified = order.amend(yes_price=50, count=20)
+#     print(f"Amended order: new price {modified.yes_price}¢, new count {modified.initial_count}")
 
 
 # --- Sell / Close Position ---

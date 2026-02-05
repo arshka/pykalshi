@@ -11,10 +11,10 @@ Setup:
 from pykalshi import KalshiClient, MarketStatus
 
 # Initialize client (loads credentials from .env)
-client = KalshiClient()
+client = KalshiClient.from_env()
 
 # For demo environment, use:
-# client = KalshiClient(demo=True)
+# client = KalshiClient.from_env(demo=True)
 
 # --- Portfolio ---
 
@@ -57,8 +57,10 @@ if markets:
     market = markets[0]
     orderbook = market.get_orderbook()
     print(f"\nOrderbook for {market.ticker}:")
-    print(f"  Yes bids: {len(orderbook.yes)} levels")
-    print(f"  No bids: {len(orderbook.no)} levels")
+    yes_levels = orderbook.orderbook.yes or []
+    no_levels = orderbook.orderbook.no or []
+    print(f"  Yes bids: {len(yes_levels)} levels")
+    print(f"  No bids: {len(no_levels)} levels")
 
 # --- Events and Series ---
 
