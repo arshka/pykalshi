@@ -52,7 +52,23 @@ jobs:
         run: uv sync --all-extras
 
       - name: Write private key
-        run: echo "${{ secrets.KALSHI_DEMO_PRIVATE_KEY }}" > /tmp/demo_private_key.pem
+        env:
+          KALSHI_DEMO_PRIVATE_KEY: ${{ secrets.KALSHI_DEMO_PRIVATE_KEY }}
+        run: printf '%s\n' "$KALSHI_DEMO_PRIVATE_KEY" > /tmp/demo_private_key.pem
+
+      - name: Verify credentials
+        env:
+          KALSHI_DEMO_API_KEY_ID: ${{ secrets.KALSHI_DEMO_API_KEY_ID }}
+        run: |
+          if [ -z "$KALSHI_DEMO_API_KEY_ID" ]; then
+            echo "Error: KALSHI_DEMO_API_KEY_ID secret not set"
+            exit 1
+          fi
+          if [ ! -s /tmp/demo_private_key.pem ]; then
+            echo "Error: KALSHI_DEMO_PRIVATE_KEY secret not set or empty"
+            exit 1
+          fi
+          echo "Credentials configured successfully"
 
       - name: Run integration tests
         env:
