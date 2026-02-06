@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/pykalshi_logo_dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="assets/pykalshi_logo_light.svg">
-    <img alt="pykalshi logo" src="assets/pykalshi_logo_light.svg">
+    <img alt="pykalshi logo" src="assets/pykalshi_logo_light.svg" width="70%">
   </picture>
 </p>
 
