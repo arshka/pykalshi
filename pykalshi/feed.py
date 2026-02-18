@@ -244,6 +244,8 @@ class Feed:
         self._client = client
         self._handlers: dict[str, list[Callable]] = {}
         self._active_subs: list[dict] = []
+        self._sids: dict[int, dict] = {}  # sid -> subscription params
+        self._pending_subs: dict[int, dict] = {}  # cmd id -> params (awaiting confirmation)
         self._ws: Any = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
@@ -326,8 +328,14 @@ class Feed:
         # Send immediately if connected
         if self._loop and self._connected.is_set():
             asyncio.run_coroutine_threadsafe(
-                self._send_cmd("subscribe", params), self._loop
+                self._subscribe_and_track(params), self._loop
             )
+
+    async def _subscribe_and_track(self, params: dict) -> None:
+        """Send subscribe command and track the cmd id for sid mapping."""
+        cmd_id = await self._send_cmd("subscribe", params)
+        with self._lock:
+            self._pending_subs[cmd_id] = params
 
     def unsubscribe(
         self,
@@ -343,27 +351,26 @@ class Feed:
             market_ticker: Single market to unsubscribe from.
             market_tickers: Multiple markets to unsubscribe from.
         """
-        params: dict[str, Any] = {"channels": [channel]}
+        target: dict[str, Any] = {"channels": [channel]}
         if market_ticker is not None:
-            params["market_ticker"] = market_ticker.upper()
+            target["market_ticker"] = market_ticker.upper()
         if market_tickers is not None:
-            params["market_tickers"] = normalize_tickers(market_tickers)
+            target["market_tickers"] = normalize_tickers(market_tickers)
 
-        # Remove from active subs
+        sids_to_remove: list[int] = []
         with self._lock:
-            self._active_subs = [
-                s
-                for s in self._active_subs
-                if not (
-                    s.get("channels") == [channel]
-                    and s.get("market_ticker") == market_ticker
-                    and s.get("market_tickers") == market_tickers
-                )
-            ]
+            # Find matching sids for connected unsubscribe
+            for sid, params in list(self._sids.items()):
+                if params == target:
+                    sids_to_remove.append(sid)
+                    del self._sids[sid]
 
-        if self._loop and self._connected.is_set():
+            # Always remove from active subs (works offline too)
+            self._active_subs = [s for s in self._active_subs if s != target]
+
+        if sids_to_remove and self._loop and self._connected.is_set():
             asyncio.run_coroutine_threadsafe(
-                self._send_cmd("unsubscribe", params), self._loop
+                self._send_cmd("unsubscribe", {"sids": sids_to_remove}), self._loop
             )
 
     def start(self) -> None:
@@ -510,11 +517,13 @@ class Feed:
                             self._reconnect_count += 1
                         self._connected_at = time.time()
 
-                    # Replay all active subscriptions
+                    # Replay all active subscriptions (sids reset on reconnect)
                     with self._lock:
+                        self._sids.clear()
+                        self._pending_subs.clear()
                         subs = list(self._active_subs)
                     for params in subs:
-                        await self._send_cmd("subscribe", params)
+                        await self._subscribe_and_track(params)
 
                     self._connected.set()
                     logger.info("Feed connected to %s", self._ws_url)
@@ -553,12 +562,14 @@ class Feed:
         """Get next command ID (thread-safe)."""
         return next(self._cmd_id_counter)
 
-    async def _send_cmd(self, cmd: str, params: dict) -> None:
-        """Send a command over the WebSocket."""
+    async def _send_cmd(self, cmd: str, params: dict) -> int:
+        """Send a command over the WebSocket. Returns the command ID."""
+        cmd_id = self._next_id()
         if self._ws:
-            msg = json.dumps({"id": self._next_id(), "cmd": cmd, "params": params})
+            msg = json.dumps({"id": cmd_id, "cmd": cmd, "params": params})
             await self._ws.send(msg)
             logger.debug("Sent %s: %s", cmd, msg)
+        return cmd_id
 
     def _dispatch(self, raw: str | bytes) -> None:
         """Parse incoming message and dispatch to handlers."""
@@ -575,6 +586,18 @@ class Feed:
 
         msg_type = data.get("type")
         if not msg_type:
+            return
+
+        # Track subscription IDs from server confirmations
+        if msg_type == "subscribed":
+            cmd_id = data.get("id")
+            inner = data.get("msg", {})
+            sid = inner.get("sid") if isinstance(inner, dict) else None
+            if sid is not None:
+                with self._lock:
+                    params = self._pending_subs.pop(cmd_id, None)
+                    if params is not None:
+                        self._sids[sid] = params
             return
 
         # Extract server timestamp if present (in milliseconds)
