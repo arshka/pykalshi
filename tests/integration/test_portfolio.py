@@ -69,8 +69,9 @@ class TestOrderGroups:
         groups = client.portfolio.get_order_groups()
         assert isinstance(groups, list)
 
-    def test_order_group_lifecycle(self, client):
+    def test_order_group_lifecycle(self, trading_client):
         """Full lifecycle: create group, add order, update limit, trigger."""
+        client = trading_client
         from pykalshi.enums import MarketStatus
 
         # Find an open market
@@ -149,16 +150,13 @@ class TestOrderMutations:
     """
 
     @pytest.fixture
-    def market_for_orders(self, client):
-        """Get an active market suitable for placing test orders."""
-        from pykalshi.exceptions import KalshiAPIError
+    def market_for_orders(self, trading_client):
+        """Get an active market suitable for placing test orders.
 
-        try:
-            markets = client.get_markets(limit=10, status=MarketStatus.OPEN)
-        except KalshiAPIError as e:
-            if e.status_code == 503:
-                pytest.skip("Exchange unavailable (503)")
-            raise
+        Uses trading_client to skip all mutation tests when the exchange is paused.
+        """
+        client = trading_client
+        markets = client.get_markets(limit=10, status=MarketStatus.OPEN)
 
         # Find one with some activity (has yes_bid or yes_ask)
         for m in markets:

@@ -89,6 +89,17 @@ def client():
 
 
 @pytest.fixture(scope="session")
+def trading_client(client):
+    """Client that is only available when the exchange is open for trading.
+
+    Skips tests when the exchange is paused (off-hours, maintenance).
+    """
+    if not client.exchange.is_trading():
+        pytest.skip("Exchange is not trading — skipping order mutation tests")
+    return client
+
+
+@pytest.fixture(scope="session")
 def active_market(client):
     """Get an active open market for testing.
 
