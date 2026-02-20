@@ -71,7 +71,7 @@ class TestAPIKeyCreate:
         # Verify POST body
         call_args = client._session.request.call_args
         assert call_args.args[0] == "POST"
-        body = json.loads(call_args.kwargs["data"])
+        body = json.loads(call_args.kwargs["content"])
         assert "public_key" in body
         assert body["name"] == "My New Key"
 
@@ -85,7 +85,7 @@ class TestAPIKeyCreate:
 
         assert key_id == "new-key-002"
         call_args = client._session.request.call_args
-        body = json.loads(call_args.kwargs["data"])
+        body = json.loads(call_args.kwargs["content"])
         assert "name" not in body
 
 
@@ -121,7 +121,7 @@ class TestAPIKeyGenerate:
 
         assert key.id == "gen-key-002"
         call_args = client._session.request.call_args
-        body = json.loads(call_args.kwargs["data"])
+        body = json.loads(call_args.kwargs["content"])
         assert body == {}
 
 
