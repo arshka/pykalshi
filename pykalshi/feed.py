@@ -11,10 +11,11 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Callable, Union, TYPE_CHECKING
+from typing import Any, Callable, ClassVar, Union, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from ._compat import CompatModel, dollars_to_cents, fp_to_int, orderbook_to_legacy
 from ._utils import normalize_ticker, normalize_tickers
 
 if TYPE_CHECKING:
@@ -31,11 +32,21 @@ _WS_SIGN_PATH = "/trade-api/ws/v2"
 # --- WebSocket Message Models ---
 
 
-class TickerMessage(BaseModel):
+class TickerMessage(CompatModel):
     """Real-time market ticker update.
 
     Sent when price, volume, or open interest changes for a subscribed market.
     """
+
+    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
+        "price": ("price_dollars", dollars_to_cents),
+        "yes_bid": ("yes_bid_dollars", dollars_to_cents),
+        "yes_ask": ("yes_ask_dollars", dollars_to_cents),
+        "volume": ("volume_fp", fp_to_int),
+        "open_interest": ("open_interest_fp", fp_to_int),
+        "dollar_volume": ("dollar_volume_dollars", dollars_to_cents),
+        "dollar_open_interest": ("dollar_open_interest_dollars", dollars_to_cents),
+    }
 
     market_ticker: str
     price_dollars: str | None = None
@@ -50,12 +61,17 @@ class TickerMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class OrderbookSnapshotMessage(BaseModel):
+class OrderbookSnapshotMessage(CompatModel):
     """Full orderbook state received on initial subscription.
 
     Contains all current price levels as dollar/fp strings.
     After this, you'll receive OrderbookDeltaMessage for incremental updates.
     """
+
+    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
+        "yes": ("yes_dollars", orderbook_to_legacy),
+        "no": ("no_dollars", orderbook_to_legacy),
+    }
 
     market_ticker: str
     yes_dollars: list[tuple[str, str]] | None = None  # [(price_dollars, quantity_fp), ...]
@@ -64,11 +80,16 @@ class OrderbookSnapshotMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class OrderbookDeltaMessage(BaseModel):
+class OrderbookDeltaMessage(CompatModel):
     """Incremental orderbook update.
 
     Represents a change at a single price level. Apply to local orderbook state.
     """
+
+    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
+        "price": ("price_dollars", dollars_to_cents),
+        "delta": ("delta_fp", fp_to_int),
+    }
 
     market_ticker: str
     price_dollars: str
@@ -78,11 +99,17 @@ class OrderbookDeltaMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class TradeMessage(BaseModel):
+class TradeMessage(CompatModel):
     """Public trade execution.
 
     Sent when any trade occurs on subscribed markets.
     """
+
+    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
+        "yes_price": ("yes_price_dollars", dollars_to_cents),
+        "no_price": ("no_price_dollars", dollars_to_cents),
+        "count": ("count_fp", fp_to_int),
+    }
 
     market_ticker: str | None = None
     ticker: str | None = None
@@ -96,11 +123,17 @@ class TradeMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class FillMessage(BaseModel):
+class FillMessage(CompatModel):
     """User fill notification (private channel).
 
     Sent when your orders are filled.
     """
+
+    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
+        "yes_price": ("yes_price_dollars", dollars_to_cents),
+        "no_price": ("no_price_dollars", dollars_to_cents),
+        "count": ("count_fp", fp_to_int),
+    }
 
     trade_id: str | None = None
     ticker: str | None = None
@@ -116,11 +149,19 @@ class FillMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class PositionMessage(BaseModel):
+class PositionMessage(CompatModel):
     """Real-time position update (private channel).
 
     Sent when your position in a market changes (after fills settle).
     """
+
+    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
+        "position": ("position_fp", fp_to_int),
+        "market_exposure": ("market_exposure_dollars", dollars_to_cents),
+        "realized_pnl": ("realized_pnl_dollars", dollars_to_cents),
+        "total_traded": ("total_traded_fp", fp_to_int),
+        "fees_paid": ("fees_paid_dollars", dollars_to_cents),
+    }
 
     ticker: str
     position_fp: str | None = None
