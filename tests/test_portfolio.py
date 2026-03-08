@@ -13,20 +13,20 @@ def test_get_positions_workflow(client, mock_response):
                 {
                     "ticker": "KXTEST-A",
                     "event_ticker": "KXTEST",
-                    "position": 10,
-                    "total_traded": 25,
+                    "position_fp": "10.00",
+                    "total_traded_fp": "25.00",
                     "resting_orders_count": 2,
-                    "fees_paid": 50,
-                    "realized_pnl": 100,
+                    "fees_paid_dollars": "0.50",
+                    "realized_pnl_dollars": "1.00",
                 },
                 {
                     "ticker": "KXTEST-B",
                     "event_ticker": "KXTEST",
-                    "position": -5,
-                    "total_traded": 10,
+                    "position_fp": "-5.00",
+                    "total_traded_fp": "10.00",
                     "resting_orders_count": 0,
-                    "fees_paid": 25,
-                    "realized_pnl": -30,
+                    "fees_paid_dollars": "0.25",
+                    "realized_pnl_dollars": "-0.30",
                 },
             ],
             "cursor": "",
@@ -38,8 +38,8 @@ def test_get_positions_workflow(client, mock_response):
     # Verify results
     assert len(positions) == 2
     assert positions[0].ticker == "KXTEST-A"
-    assert positions[0].position == 10
-    assert positions[1].position == -5  # Short position
+    assert positions[0].position_fp == "10.00"
+    assert positions[1].position_fp == "-5.00"  # Short position
 
     # Verify endpoint called
     client._session.request.assert_called_with(
@@ -79,9 +79,9 @@ def test_get_fills_workflow(client, mock_response):
                     "order_id": "order-123",
                     "side": "yes",
                     "action": "buy",
-                    "count": 5,
-                    "yes_price": 50,
-                    "no_price": 50,
+                    "count_fp": "5.00",
+                    "yes_price_dollars": "0.50",
+                    "no_price_dollars": "0.50",
                     "created_time": "2024-01-01T12:00:00Z",
                     "is_taker": True,
                 },
@@ -91,9 +91,9 @@ def test_get_fills_workflow(client, mock_response):
                     "order_id": "order-124",
                     "side": "no",
                     "action": "sell",
-                    "count": 3,
-                    "yes_price": 45,
-                    "no_price": 55,
+                    "count_fp": "3.00",
+                    "yes_price_dollars": "0.45",
+                    "no_price_dollars": "0.55",
                     "created_time": "2024-01-01T13:00:00Z",
                     "is_taker": False,
                 },
@@ -109,7 +109,7 @@ def test_get_fills_workflow(client, mock_response):
     assert fills[0].trade_id == "trade-001"
     assert fills[0].action == Action.BUY
     assert fills[0].side == Side.YES
-    assert fills[0].count == 5
+    assert fills[0].count_fp == "5.00"
     assert fills[0].is_taker == True
 
     assert fills[1].action == Action.SELL
@@ -156,8 +156,8 @@ def test_get_order_by_id(client, mock_response):
                 "ticker": "KXTEST",
                 "action": "buy",
                 "side": "yes",
-                "count": 10,
-                "yes_price": 55,
+                "initial_count_fp": "10.00",
+                "yes_price_dollars": "0.55",
                 "status": "resting",
                 "type": "limit",
             }
@@ -201,8 +201,8 @@ def test_cancel_order(client, mock_response):
                 "ticker": "KXTEST",
                 "action": "buy",
                 "side": "yes",
-                "count": 10,
-                "yes_price": 55,
+                "initial_count_fp": "10.00",
+                "yes_price_dollars": "0.55",
                 "status": "canceled",
                 "type": "limit",
             }
@@ -264,7 +264,7 @@ def test_order_amend(client, mock_response):
         order_id="order-abc-123",
         ticker="KXTEST",
         status=OrderStatus.RESTING,
-        yes_price=50,
+        yes_price_dollars="0.50",
     )
     order = Order(client, initial_model)
 
@@ -274,15 +274,15 @@ def test_order_amend(client, mock_response):
                 "order_id": "order-abc-123",
                 "ticker": "KXTEST",
                 "status": "resting",
-                "yes_price": 55,
+                "yes_price_dollars": "0.55",
             }
         }
     )
 
-    result = order.amend(yes_price=55)
+    result = order.amend(yes_price_dollars="0.55")
 
     assert result is order
-    assert order.yes_price == 55
+    assert order.yes_price_dollars == "0.55"
 
     # Verify POST to amend endpoint
     call_args = client._session.request.call_args
@@ -299,7 +299,7 @@ def test_order_decrease(client, mock_response):
         order_id="order-abc-123",
         ticker="KXTEST",
         status=OrderStatus.RESTING,
-        remaining_count=10,
+        remaining_count_fp="10.00",
     )
     order = Order(client, initial_model)
 
@@ -309,15 +309,15 @@ def test_order_decrease(client, mock_response):
                 "order_id": "order-abc-123",
                 "ticker": "KXTEST",
                 "status": "resting",
-                "remaining_count": 7,
+                "remaining_count_fp": "7.00",
             }
         }
     )
 
-    result = order.decrease(reduce_by=3)
+    result = order.decrease(reduce_by_fp="3.00")
 
     assert result is order
-    assert order.remaining_count == 7
+    assert order.remaining_count_fp == "7.00"
 
     # Verify POST to decrease endpoint
     call_args = client._session.request.call_args
@@ -334,7 +334,7 @@ def test_order_refresh(client, mock_response):
         order_id="order-abc-123",
         ticker="KXTEST",
         status=OrderStatus.RESTING,
-        fill_count=0,
+        fill_count_fp="0",
     )
     order = Order(client, initial_model)
 
@@ -345,7 +345,7 @@ def test_order_refresh(client, mock_response):
                 "order_id": "order-abc-123",
                 "ticker": "KXTEST",
                 "status": "resting",
-                "fill_count": 5,
+                "fill_count_fp": "5.00",
             }
         }
     )
@@ -353,7 +353,7 @@ def test_order_refresh(client, mock_response):
     result = order.refresh()
 
     assert result is order
-    assert order.fill_count == 5
+    assert order.fill_count_fp == "5.00"
 
     # Verify GET to order endpoint
     client._session.request.assert_called_with(

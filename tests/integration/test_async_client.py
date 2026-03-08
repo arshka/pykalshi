@@ -70,7 +70,7 @@ class TestAsyncPortfolio:
     async def test_get_balance(self, async_client):
         """Fetch account balance."""
         balance = await async_client.portfolio.get_balance()
-        assert balance.balance is not None
+        assert balance.balance_dollars is not None
 
     @pytest.mark.asyncio
     async def test_get_positions(self, async_client):

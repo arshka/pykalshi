@@ -11,9 +11,9 @@ class TestPortfolioReadOnly:
         """Get account balance."""
         balance = client.portfolio.get_balance()
 
-        assert hasattr(balance, "balance")
-        assert hasattr(balance, "portfolio_value")
-        assert isinstance(balance.balance, int)
+        assert hasattr(balance, "balance_dollars")
+        assert hasattr(balance, "portfolio_value_dollars")
+        assert isinstance(balance.balance_dollars, str)
 
     def test_get_positions(self, client):
         """Get positions list."""
@@ -24,7 +24,7 @@ class TestPortfolioReadOnly:
         if positions:
             pos = positions[0]
             assert hasattr(pos, "ticker")
-            assert hasattr(pos, "position")
+            assert hasattr(pos, "position_fp")
 
     def test_get_orders(self, client):
         """Get orders list."""
@@ -45,7 +45,7 @@ class TestPortfolioReadOnly:
         if fills:
             fill = fills[0]
             assert hasattr(fill, "ticker")
-            assert hasattr(fill, "yes_price")
+            assert hasattr(fill, "yes_price_dollars")
 
     def test_get_settlements(self, client):
         """Get settlements list."""
@@ -78,7 +78,7 @@ class TestOrderGroups:
         markets = client.get_markets(limit=10, status=MarketStatus.OPEN)
         market = None
         for m in markets:
-            if m.yes_bid or m.yes_ask:
+            if m.yes_bid_dollars or m.yes_ask_dollars:
                 market = m
                 break
         if not market:
@@ -98,16 +98,16 @@ class TestOrderGroups:
                 market,
                 action=Action.BUY,
                 side=Side.YES,
-                count=1,
-                yes_price=1,
+                count_fp="1",
+                yes_price_dollars="0.01",
                 order_group_id=group_id,
             )
             order2 = client.portfolio.place_order(
                 market,
                 action=Action.BUY,
                 side=Side.YES,
-                count=1,
-                yes_price=2,
+                count_fp="1",
+                yes_price_dollars="0.02",
                 order_group_id=group_id,
             )
 
@@ -126,7 +126,7 @@ class TestOrderGroups:
             # Verify update (allow time for change to propagate)
             time.sleep(0.5)
             updated = client.portfolio.get_order_group(group_id)
-            assert updated.contracts_limit == 200
+            assert updated.contracts_limit_fp is not None
 
             # Trigger the group (cancels all orders)
             client.portfolio.trigger_order_group(group_id)
@@ -160,7 +160,7 @@ class TestOrderMutations:
 
         # Find one with some activity (has yes_bid or yes_ask)
         for m in markets:
-            if m.data.yes_bid or m.data.yes_ask:
+            if m.data.yes_bid_dollars or m.data.yes_ask_dollars:
                 return m
         # Fall back to any open market
         if markets:
@@ -171,13 +171,13 @@ class TestOrderMutations:
         """Place an order and cancel it."""
         market = market_for_orders
 
-        # Place limit order at 1 cent (won't fill)
+        # Place limit order at $0.01 (won't fill)
         order = client.portfolio.place_order(
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=1,
-            yes_price=1,  # 1 cent - won't fill
+            count_fp="1",
+            yes_price_dollars="0.01",
         )
 
         assert order.order_id is not None
@@ -198,8 +198,8 @@ class TestOrderMutations:
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=1,
-            yes_price=1,
+            count_fp="1",
+            yes_price_dollars="0.01",
         )
 
         assert order.order_id is not None
@@ -213,20 +213,20 @@ class TestOrderMutations:
         """Place an order and amend its price."""
         market = market_for_orders
 
-        # Place at 1 cent
+        # Place at $0.01
         order = client.portfolio.place_order(
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=1,
-            yes_price=1,
+            count_fp="1",
+            yes_price_dollars="0.01",
         )
 
-        # Amend to 2 cents - pass order data to avoid re-fetch
+        # Amend to $0.02
         amended = client.portfolio.amend_order(
             order_id=order.order_id,
-            count=1,
-            yes_price=2,
+            count_fp="1",
+            yes_price_dollars="0.02",
             ticker=order.ticker,
             action=order.action,
             side=order.side,
@@ -247,18 +247,18 @@ class TestOrderMutations:
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=1,
-            yes_price=1,
+            count_fp="1",
+            yes_price_dollars="0.01",
         )
 
-        original_price = order.yes_price
+        original_price = order.yes_price_dollars
 
         # Use the order's amend method
-        order.amend(count=1, yes_price=2)
+        order.amend(count_fp="1", yes_price_dollars="0.02")
 
         # Verify amendment - price should have changed
-        assert order.yes_price == 2
-        assert order.yes_price != original_price
+        assert order.yes_price_dollars == "0.02"
+        assert order.yes_price_dollars != original_price
         assert order.status == OrderStatus.RESTING
 
         # Cleanup
@@ -273,20 +273,20 @@ class TestOrderMutations:
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=5,
-            yes_price=1,
+            count_fp="5",
+            yes_price_dollars="0.01",
         )
 
-        assert order.remaining_count == 5
+        assert order.remaining_count_fp == "5"
 
-        # Decrease to 2
+        # Decrease by 3
         decreased = client.portfolio.decrease_order(
             order_id=order.order_id,
-            reduce_by=3,
+            reduce_by_fp="3",
         )
 
         assert decreased.order_id == order.order_id
-        assert decreased.remaining_count == 2
+        assert decreased.remaining_count_fp == "2"
 
         # Cleanup
         client.portfolio.cancel_order(order.order_id)
@@ -299,14 +299,14 @@ class TestOrderMutations:
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=5,
-            yes_price=1,
+            count_fp="5",
+            yes_price_dollars="0.01",
         )
 
         # Use the order's decrease method
-        order.decrease(reduce_by=2)
+        order.decrease(reduce_by_fp="2")
 
-        assert order.remaining_count == 3
+        assert order.remaining_count_fp == "3"
 
         # Cleanup
         order.cancel()
@@ -325,8 +325,8 @@ class TestOrderMutations:
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=1,
-            yes_price=1,
+            count_fp="1",
+            yes_price_dollars="0.01",
         )
 
         # Refresh may fail on demo due to single order lookup 404
@@ -352,8 +352,8 @@ class TestOrderMutations:
                 market,
                 action=Action.BUY,
                 side=Side.YES,
-                count=1,
-                yes_price=1,
+                count_fp="1",
+                yes_price_dollars="0.01",
             )
             orders.append(order)
 
@@ -382,8 +382,8 @@ class TestOrderMutations:
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=1,
-            yes_price=1,
+            count_fp="1",
+            yes_price_dollars="0.01",
         )
 
         # Fetch by ID - may fail on demo
@@ -410,17 +410,17 @@ class TestOrderMutations:
                 "ticker": market.ticker,
                 "action": "buy",
                 "side": "yes",
-                "count": 1,
+                "count_fp": "1",
                 "type": "limit",
-                "yes_price": 1,
+                "yes_price_dollars": "0.01",
             },
             {
                 "ticker": market.ticker,
                 "action": "buy",
                 "side": "yes",
-                "count": 1,
+                "count_fp": "1",
                 "type": "limit",
-                "yes_price": 2,
+                "yes_price_dollars": "0.02",
             },
         ]
 
@@ -439,7 +439,7 @@ class TestOrderMutations:
         client.portfolio.batch_cancel_orders(order_ids)
 
     def test_batch_place_orders_no_price_conversion(self, client, market_for_orders):
-        """Batch orders with no_price should be converted to yes_price."""
+        """Batch orders with no_price_dollars should be converted to yes_price_dollars."""
         market = market_for_orders
 
         orders_to_place = [
@@ -447,9 +447,9 @@ class TestOrderMutations:
                 "ticker": market.ticker,
                 "action": "buy",
                 "side": "no",
-                "count": 1,
+                "count_fp": "1",
                 "type": "limit",
-                "no_price": 99,  # Should become yes_price=1
+                "no_price_dollars": "0.99",  # Should become yes_price_dollars="0.01"
             },
         ]
 
@@ -457,7 +457,7 @@ class TestOrderMutations:
 
         assert len(result) == 1
         assert result[0].order_id is not None
-        assert result[0].yes_price == 1
+        assert result[0].yes_price_dollars == "0.01"
 
         # Cleanup
         client.portfolio.batch_cancel_orders([result[0].order_id])
@@ -466,25 +466,25 @@ class TestOrderMutations:
         """Batch validation catches errors before hitting the API."""
         market = market_for_orders
 
-        # Both yes_price and no_price
-        with pytest.raises(ValueError, match="yes_price or no_price"):
+        # Both yes_price_dollars and no_price_dollars
+        with pytest.raises(ValueError, match="yes_price_dollars or no_price_dollars"):
             client.portfolio.batch_place_orders([{
                 "ticker": market.ticker,
                 "action": "buy",
                 "side": "yes",
-                "count": 1,
+                "count_fp": "1",
                 "type": "limit",
-                "yes_price": 45,
-                "no_price": 55,
+                "yes_price_dollars": "0.45",
+                "no_price_dollars": "0.55",
             }])
 
         # Limit order without price
-        with pytest.raises(ValueError, match="require yes_price or no_price"):
+        with pytest.raises(ValueError, match="require yes_price_dollars or no_price_dollars"):
             client.portfolio.batch_place_orders([{
                 "ticker": market.ticker,
                 "action": "buy",
                 "side": "yes",
-                "count": 1,
+                "count_fp": "1",
                 "type": "limit",
             }])
 
@@ -496,8 +496,8 @@ class TestOrderMutations:
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=1,
-            yes_price=1,
+            count_fp="1",
+            yes_price_dollars="0.01",
         )
 
         # Get queue position
@@ -524,8 +524,8 @@ class TestOrderMutations:
                 market,
                 action=Action.BUY,
                 side=Side.YES,
-                count=1,
-                yes_price=1,
+                count_fp="1",
+                yes_price_dollars="0.01",
             )
             orders.append(order)
 
@@ -561,8 +561,8 @@ class TestOrderMutations:
             market,
             action=Action.BUY,
             side=Side.YES,
-            count=1,
-            yes_price=1,
+            count_fp="1",
+            yes_price_dollars="0.01",
         )
 
         assert order.status == OrderStatus.RESTING

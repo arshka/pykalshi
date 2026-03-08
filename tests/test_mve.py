@@ -119,19 +119,19 @@ class TestAssociatedEventModel:
         ae = AssociatedEventModel(ticker="EVT-1")
         assert ae.ticker == "EVT-1"
         assert ae.is_yes_only is False
-        assert ae.size_min is None
-        assert ae.size_max is None
+        assert ae.size_min_fp is None
+        assert ae.size_max_fp is None
         assert ae.active_quoters is None
 
     def test_all_fields(self):
         ae = AssociatedEventModel(
             ticker="EVT-1", is_yes_only=True,
-            size_min=1, size_max=3,
+            size_min_fp="1.00", size_max_fp="3.00",
             active_quoters=["user-a", "user-b"],
         )
         assert ae.is_yes_only is True
-        assert ae.size_min == 1
-        assert ae.size_max == 3
+        assert ae.size_min_fp == "1.00"
+        assert ae.size_max_fp == "3.00"
         assert ae.active_quoters == ["user-a", "user-b"]
 
 
@@ -156,19 +156,19 @@ class TestMveCollectionModel:
             open_date="2026-01-01",
             close_date="2026-12-31",
             associated_events=[
-                {"ticker": "E1", "is_yes_only": True, "size_min": 1, "size_max": 1},
+                {"ticker": "E1", "is_yes_only": True, "size_min_fp": "1.00", "size_max_fp": "1.00"},
                 {"ticker": "E2"},
             ],
             is_ordered=True,
-            size_min=2,
-            size_max=3,
+            size_min_fp="2.00",
+            size_max_fp="3.00",
             functional_description="Product of legs",
         )
         assert model.title == "Test Collection"
         assert len(model.associated_events) == 2
         assert model.associated_events[0].is_yes_only is True
         assert model.is_ordered is True
-        assert model.size_min == 2
+        assert model.size_min_fp == "2.00"
 
 
 # --- RfqModel and QuoteModel ---
@@ -192,7 +192,7 @@ class TestRfqModel:
             "rfq_id": "rfq-1",
             "market_ticker": "KXMVE-COMBO",
             "status": "active",
-            "contracts": 10,
+            "contracts_fp": "10.00",
             "rest_remainder": True,
             "mve_collection_ticker": "COL-1",
             "mve_selected_legs": [
@@ -202,7 +202,7 @@ class TestRfqModel:
             "creator_id": "user-123",
         })
         assert rfq.status == "active"
-        assert rfq.contracts == 10
+        assert rfq.contracts_fp == "10.00"
         assert rfq.mve_collection_ticker == "COL-1"
         assert len(rfq.mve_selected_legs) == 1
 
@@ -224,16 +224,13 @@ class TestQuoteModel:
             "rfq_id": "rfq-1",
             "market_ticker": "KXMVE-COMBO",
             "status": "pending",
-            "yes_bid": 45,
-            "no_bid": 55,
             "yes_bid_dollars": "0.45",
             "no_bid_dollars": "0.55",
             "rest_remainder": False,
             "created_ts": "2026-01-15T10:05:00Z",
         })
-        assert quote.yes_bid == 45
-        assert quote.no_bid == 55
         assert quote.yes_bid_dollars == "0.45"
+        assert quote.no_bid_dollars == "0.55"
         assert quote.status == "pending"
 
 
@@ -253,8 +250,8 @@ class TestGetMveCollection:
                     {"ticker": "EVT-A", "is_yes_only": True},
                     {"ticker": "EVT-B"},
                 ],
-                "size_min": 2,
-                "size_max": 5,
+                "size_min_fp": "2.00",
+                "size_max_fp": "5.00",
             }
         })
 
@@ -593,23 +590,23 @@ class TestCommunicationsCreateRfq:
                 "rfq_id": "rfq-001",
                 "market_ticker": "KXMVE-COMBO",
                 "status": "active",
-                "contracts": 10,
+                "contracts_fp": "10.00",
             }
         })
 
-        rfq = client.communications.create_rfq("KXMVE-COMBO", contracts=10)
+        rfq = client.communications.create_rfq("KXMVE-COMBO", contracts_fp="10.00")
 
         assert isinstance(rfq, RfqModel)
         assert rfq.rfq_id == "rfq-001"
         assert rfq.market_ticker == "KXMVE-COMBO"
-        assert rfq.contracts == 10
+        assert rfq.contracts_fp == "10.00"
 
         # Verify POST body
         import json
         call_kwargs = client._session.request.call_args
         body = json.loads(call_kwargs.kwargs.get("content", call_kwargs[1].get("content", "")))
         assert body["market_ticker"] == "KXMVE-COMBO"
-        assert body["contracts"] == 10
+        assert body["contracts_fp"] == "10.00"
 
     def test_create_rfq_with_target_cost(self, client, mock_response):
         """Test creating an RFQ with target cost in dollars."""
@@ -640,7 +637,7 @@ class TestCommunicationsCreateRfq:
         })
 
         rfq = client.communications.create_rfq(
-            "KXMVE-COMBO", contracts=5, rest_remainder=True,
+            "KXMVE-COMBO", contracts_fp="5.00", rest_remainder=True,
         )
 
         assert rfq.rest_remainder is True
@@ -713,7 +710,7 @@ class TestCommunicationsGetRfq:
                 "rfq_id": "rfq-001",
                 "market_ticker": "KXMVE-COMBO",
                 "status": "active",
-                "contracts": 10,
+                "contracts_fp": "10.00",
                 "mve_collection_ticker": "COL-1",
                 "mve_selected_legs": [
                     {"event_ticker": "E1", "market_ticker": "M1", "side": "yes"},
@@ -725,7 +722,7 @@ class TestCommunicationsGetRfq:
 
         assert isinstance(rfq, RfqModel)
         assert rfq.rfq_id == "rfq-001"
-        assert rfq.contracts == 10
+        assert rfq.contracts_fp == "10.00"
         assert rfq.mve_selected_legs is not None
         assert len(rfq.mve_selected_legs) == 1
 
@@ -750,8 +747,6 @@ class TestCommunicationsCreateQuote:
                 "rfq_id": "rfq-001",
                 "market_ticker": "KXMVE-COMBO",
                 "status": "pending",
-                "yes_bid": 45,
-                "no_bid": 55,
                 "yes_bid_dollars": "0.45",
                 "no_bid_dollars": "0.55",
             }
@@ -764,8 +759,8 @@ class TestCommunicationsCreateQuote:
         assert isinstance(quote, QuoteModel)
         assert quote.quote_id == "q-001"
         assert quote.rfq_id == "rfq-001"
-        assert quote.yes_bid == 45
-        assert quote.no_bid == 55
+        assert quote.yes_bid_dollars == "0.45"
+        assert quote.no_bid_dollars == "0.55"
 
     def test_create_quote_zero_bid(self, client, mock_response):
         """Test creating a quote with zero bids."""
@@ -773,8 +768,8 @@ class TestCommunicationsCreateQuote:
             "quote": {
                 "quote_id": "q-002",
                 "rfq_id": "rfq-001",
-                "yes_bid": 30,
-                "no_bid": 0,
+                "yes_bid_dollars": "0.30",
+                "no_bid_dollars": "0.00",
             }
         })
 
@@ -782,8 +777,8 @@ class TestCommunicationsCreateQuote:
             "rfq-001", yes_bid="0.30", no_bid="0.00",
         )
 
-        assert quote.yes_bid == 30
-        assert quote.no_bid == 0
+        assert quote.yes_bid_dollars == "0.30"
+        assert quote.no_bid_dollars == "0.00"
 
 
 class TestCommunicationsGetQuotes:
@@ -842,8 +837,8 @@ class TestMveWorkflow:
                             {"ticker": "PRES-DEM", "is_yes_only": True},
                             {"ticker": "PRES-REP", "is_yes_only": True},
                         ],
-                        "size_min": 2,
-                        "size_max": 2,
+                        "size_min_fp": "2.00",
+                        "size_max_fp": "2.00",
                     },
                 ],
                 "cursor": "",
@@ -854,8 +849,8 @@ class TestMveWorkflow:
                     "ticker": "KXMVE-PRES-COMBO1",
                     "event_ticker": "KXMVE-PRES-EVT",
                     "status": "open",
-                    "yes_bid": 30,
-                    "yes_ask": 35,
+                    "yes_bid_dollars": "0.30",
+                    "yes_ask_dollars": "0.35",
                     "mve_collection_ticker": "COL-PRES",
                     "mve_selected_legs": [
                         {"event_ticker": "PRES-DEM", "market_ticker": "DEM-BIDEN", "side": "yes"},
@@ -880,7 +875,7 @@ class TestMveWorkflow:
         assert market.ticker == "KXMVE-PRES-COMBO1"
         assert market.mve_collection_ticker == "COL-PRES"
         assert len(market.mve_selected_legs) == 2
-        assert market.yes_bid == 30
+        assert market.yes_bid_dollars == "0.30"
 
     def test_rfq_quote_workflow(self, client, mock_response):
         """Test RFQ -> Quote workflow for combo trading."""
@@ -891,13 +886,13 @@ class TestMveWorkflow:
                     "rfq_id": "rfq-xyz",
                     "market_ticker": "KXMVE-COMBO",
                     "status": "active",
-                    "contracts": 5,
+                    "contracts_fp": "5.00",
                 }
             }),
             # 2. List RFQs (to see what's out there)
             mock_response({
                 "rfqs": [
-                    {"rfq_id": "rfq-xyz", "market_ticker": "KXMVE-COMBO", "status": "active", "contracts": 5},
+                    {"rfq_id": "rfq-xyz", "market_ticker": "KXMVE-COMBO", "status": "active", "contracts_fp": "5.00"},
                 ],
                 "cursor": "",
             }),
@@ -908,14 +903,14 @@ class TestMveWorkflow:
                     "rfq_id": "rfq-xyz",
                     "market_ticker": "KXMVE-COMBO",
                     "status": "pending",
-                    "yes_bid": 40,
-                    "no_bid": 60,
+                    "yes_bid_dollars": "0.40",
+                    "no_bid_dollars": "0.60",
                 }
             }),
         ]
 
         # Step 1: Create RFQ
-        rfq = client.communications.create_rfq("KXMVE-COMBO", contracts=5)
+        rfq = client.communications.create_rfq("KXMVE-COMBO", contracts_fp="5.00")
         assert rfq.rfq_id == "rfq-xyz"
         assert rfq.status == "active"
 
@@ -929,7 +924,7 @@ class TestMveWorkflow:
         )
         assert quote.quote_id == "q-abc"
         assert quote.rfq_id == "rfq-xyz"
-        assert quote.yes_bid == 40
+        assert quote.yes_bid_dollars == "0.40"
 
 
 class TestCommunicationsCachedProperty:

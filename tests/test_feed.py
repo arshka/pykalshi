@@ -162,9 +162,9 @@ class TestDispatch:
             "seq": 1,
             "msg": {
                 "market_ticker": "ABC-123",
-                "yes_bid": 45,
-                "yes_ask": 55,
-                "volume": 1000,
+                "yes_bid_dollars": "0.45",
+                "yes_ask_dollars": "0.55",
+                "volume_fp": "1000.00",
             }
         })
         feed._dispatch(raw)
@@ -173,9 +173,9 @@ class TestDispatch:
         msg = received[0]
         assert isinstance(msg, TickerMessage)
         assert msg.market_ticker == "ABC-123"
-        assert msg.yes_bid == 45
-        assert msg.yes_ask == 55
-        assert msg.volume == 1000
+        assert msg.yes_bid_dollars == "0.45"
+        assert msg.yes_ask_dollars == "0.55"
+        assert msg.volume_fp == "1000.00"
 
     def test_orderbook_snapshot_dispatches_to_delta_handlers(self, client):
         """orderbook_snapshot messages go to orderbook_delta handlers."""
@@ -189,8 +189,8 @@ class TestDispatch:
             "seq": 1,
             "msg": {
                 "market_ticker": "ABC-123",
-                "yes": [[45, 100], [50, 200]],
-                "no": [[55, 150]],
+                "yes_dollars": [["0.45", "100.00"], ["0.50", "200.00"]],
+                "no_dollars": [["0.55", "150.00"]],
             }
         })
         feed._dispatch(raw)
@@ -199,8 +199,8 @@ class TestDispatch:
         msg = received[0]
         assert isinstance(msg, OrderbookSnapshotMessage)
         assert msg.market_ticker == "ABC-123"
-        assert msg.yes == [(45, 100), (50, 200)]
-        assert msg.no == [(55, 150)]
+        assert msg.yes_dollars == [("0.45", "100.00"), ("0.50", "200.00")]
+        assert msg.no_dollars == [("0.55", "150.00")]
 
     def test_orderbook_delta_message(self, client):
         """orderbook_delta messages are parsed correctly."""
@@ -214,8 +214,8 @@ class TestDispatch:
             "seq": 2,
             "msg": {
                 "market_ticker": "ABC-123",
-                "price": 45,
-                "delta": -10,
+                "price_dollars": "0.45",
+                "delta_fp": "-10.00",
                 "side": "yes",
             }
         })
@@ -224,8 +224,8 @@ class TestDispatch:
         assert len(received) == 1
         msg = received[0]
         assert isinstance(msg, OrderbookDeltaMessage)
-        assert msg.price == 45
-        assert msg.delta == -10
+        assert msg.price_dollars == "0.45"
+        assert msg.delta_fp == "-10.00"
         assert msg.side == "yes"
 
     def test_trade_message(self, client):
@@ -241,8 +241,8 @@ class TestDispatch:
             "msg": {
                 "market_ticker": "ABC-123",
                 "trade_id": "trade-1",
-                "count": 10,
-                "yes_price": 55,
+                "count_fp": "10.00",
+                "yes_price_dollars": "0.55",
                 "taker_side": "yes",
             }
         })
@@ -252,8 +252,8 @@ class TestDispatch:
         msg = received[0]
         assert isinstance(msg, TradeMessage)
         assert msg.trade_id == "trade-1"
-        assert msg.count == 10
-        assert msg.yes_price == 55
+        assert msg.count_fp == "10.00"
+        assert msg.yes_price_dollars == "0.55"
         assert msg.taker_side == "yes"
 
     def test_fill_message(self, client):
@@ -272,8 +272,8 @@ class TestDispatch:
                 "order_id": "ord-1",
                 "side": "yes",
                 "action": "buy",
-                "count": 5,
-                "yes_price": 60,
+                "count_fp": "5.00",
+                "yes_price_dollars": "0.60",
                 "is_taker": True,
             }
         })
@@ -298,12 +298,12 @@ class TestDispatch:
             "seq": 1,
             "msg": {
                 "ticker": "KXTEST-A",
-                "position": 10,
-                "market_exposure": 450,
-                "realized_pnl": 250,
-                "total_traded": 25,
+                "position_fp": "10.00",
+                "market_exposure_dollars": "4.50",
+                "realized_pnl_dollars": "2.50",
+                "total_traded_fp": "25.00",
                 "resting_orders_count": 2,
-                "fees_paid": 50,
+                "fees_paid_dollars": "0.50",
             }
         })
         feed._dispatch(raw)
@@ -312,9 +312,9 @@ class TestDispatch:
         msg = received[0]
         assert isinstance(msg, PositionMessage)
         assert msg.ticker == "KXTEST-A"
-        assert msg.position == 10
-        assert msg.market_exposure == 450
-        assert msg.realized_pnl == 250
+        assert msg.position_fp == "10.00"
+        assert msg.market_exposure_dollars == "4.50"
+        assert msg.realized_pnl_dollars == "2.50"
 
     def test_no_handler_registered(self, client):
         """Messages are silently dropped when no handler is registered."""
@@ -464,45 +464,45 @@ class TestMessageModels:
         """TickerMessage handles optional fields."""
         msg = TickerMessage(market_ticker="TEST")
         assert msg.market_ticker == "TEST"
-        assert msg.yes_bid is None
-        assert msg.volume is None
+        assert msg.yes_bid_dollars is None
+        assert msg.volume_fp is None
 
     def test_ticker_model_all_fields(self):
         """TickerMessage accepts all fields."""
         msg = TickerMessage(
             market_ticker="TEST",
-            price=50,
-            yes_bid=45,
-            yes_ask=55,
-            volume=1000,
-            open_interest=500,
-            dollar_volume=50000,
-            dollar_open_interest=25000,
+            price_dollars="0.50",
+            yes_bid_dollars="0.45",
+            yes_ask_dollars="0.55",
+            volume_fp="1000.00",
+            open_interest_fp="500.00",
+            dollar_volume_dollars="500.00",
+            dollar_open_interest_dollars="250.00",
             ts=1234567890,
         )
-        assert msg.yes_bid == 45
+        assert msg.yes_bid_dollars == "0.45"
         assert msg.ts == 1234567890
 
     def test_orderbook_snapshot_model(self):
         """OrderbookSnapshotMessage parses correctly."""
         msg = OrderbookSnapshotMessage(
             market_ticker="TEST",
-            yes=[(45, 100), (50, 200)],
-            no=[(55, 150)],
+            yes_dollars=[("0.45", "100.00"), ("0.50", "200.00")],
+            no_dollars=[("0.55", "150.00")],
         )
-        assert len(msg.yes) == 2
-        assert msg.yes[0] == (45, 100)
-        assert msg.no[0] == (55, 150)
+        assert len(msg.yes_dollars) == 2
+        assert msg.yes_dollars[0] == ("0.45", "100.00")
+        assert msg.no_dollars[0] == ("0.55", "150.00")
 
     def test_orderbook_delta_model(self):
         """OrderbookDeltaMessage parses correctly."""
         msg = OrderbookDeltaMessage(
             market_ticker="TEST",
-            price=45,
-            delta=-10,
+            price_dollars="0.45",
+            delta_fp="-10.00",
             side="yes",
         )
-        assert msg.delta == -10
+        assert msg.delta_fp == "-10.00"
         assert msg.side == "yes"
 
     def test_trade_model(self):
@@ -510,8 +510,8 @@ class TestMessageModels:
         msg = TradeMessage(
             market_ticker="TEST",
             trade_id="t1",
-            count=10,
-            yes_price=55,
+            count_fp="10.00",
+            yes_price_dollars="0.55",
             taker_side="yes",
         )
         assert msg.trade_id == "t1"
@@ -525,28 +525,28 @@ class TestMessageModels:
             order_id="o1",
             side="yes",
             action="buy",
-            count=5,
-            yes_price=60,
+            count_fp="5.00",
+            yes_price_dollars="0.60",
             is_taker=True,
         )
-        assert msg.count == 5
+        assert msg.count_fp == "5.00"
         assert msg.is_taker is True
 
     def test_position_model(self):
         """PositionMessage parses correctly."""
         msg = PositionMessage(
             ticker="KXTEST",
-            position=10,
-            market_exposure=450,
-            realized_pnl=250,
-            total_traded=25,
+            position_fp="10.00",
+            market_exposure_dollars="4.50",
+            realized_pnl_dollars="2.50",
+            total_traded_fp="25.00",
             resting_orders_count=2,
-            fees_paid=50,
+            fees_paid_dollars="0.50",
             ts=1704067200,
         )
         assert msg.ticker == "KXTEST"
-        assert msg.position == 10
-        assert msg.realized_pnl == 250
+        assert msg.position_fp == "10.00"
+        assert msg.realized_pnl_dollars == "2.50"
         assert msg.ts == 1704067200
 
     def test_models_ignore_extra_fields(self):

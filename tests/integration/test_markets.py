@@ -2,6 +2,7 @@
 
 import time
 import pytest
+from decimal import Decimal
 from pykalshi.enums import MarketStatus, CandlestickPeriod
 from pykalshi.exceptions import KalshiAPIError, ResourceNotFoundError
 
@@ -38,10 +39,10 @@ class TestMarkets:
         ob = active_market.get_orderbook()
 
         assert hasattr(ob, "orderbook")
-        assert hasattr(ob.orderbook, "yes")
-        assert hasattr(ob.orderbook, "no")
-        # yes and no are lists or None (empty orderbook)
-        assert ob.orderbook.yes is None or isinstance(ob.orderbook.yes, list)
+        assert hasattr(ob.orderbook, "yes_dollars")
+        assert hasattr(ob.orderbook, "no_dollars")
+        # yes_dollars and no_dollars are lists or None (empty orderbook)
+        assert ob.orderbook.yes_dollars is None or isinstance(ob.orderbook.yes_dollars, list)
 
     def test_market_get_trades(self, client, active_market):
         """Get trades for a market."""
@@ -163,15 +164,15 @@ class TestCandlesticks:
                 )
 
                 for ticker, resp in result.items():
-                    with_volume = [c for c in resp.candlesticks if c.volume > 0]
+                    with_volume = [c for c in resp.candlesticks if c.volume_fp and Decimal(c.volume_fp) > 0]
                     if with_volume:
                         # Found one with data - verify structure
                         candle = with_volume[0]
-                        assert candle.volume > 0
-                        assert hasattr(candle, "open_interest")
+                        assert Decimal(candle.volume_fp) > 0
+                        assert hasattr(candle, "open_interest_fp")
                         assert hasattr(candle, "price")
-                        assert hasattr(candle.price, "open")
-                        assert hasattr(candle.price, "close")
+                        assert hasattr(candle.price, "open_dollars")
+                        assert hasattr(candle.price, "close_dollars")
                         return  # Success
             except Exception:
                 continue
@@ -189,7 +190,7 @@ class TestTrades:
         assert isinstance(trades, list)
         if trades:
             assert hasattr(trades[0], "ticker")
-            assert hasattr(trades[0], "yes_price")
+            assert hasattr(trades[0], "yes_price_dollars")
 
 
 class TestNavigation:

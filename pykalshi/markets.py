@@ -48,40 +48,40 @@ class Market:
         return self.data.subtitle
 
     @property
-    def yes_bid(self) -> int | None:
-        return self.data.yes_bid
+    def yes_bid_dollars(self) -> str | None:
+        return self.data.yes_bid_dollars
 
     @property
-    def yes_ask(self) -> int | None:
-        return self.data.yes_ask
+    def yes_ask_dollars(self) -> str | None:
+        return self.data.yes_ask_dollars
 
     @property
-    def no_bid(self) -> int | None:
-        return self.data.no_bid
+    def no_bid_dollars(self) -> str | None:
+        return self.data.no_bid_dollars
 
     @property
-    def no_ask(self) -> int | None:
-        return self.data.no_ask
+    def no_ask_dollars(self) -> str | None:
+        return self.data.no_ask_dollars
 
     @property
-    def last_price(self) -> int | None:
-        return self.data.last_price
+    def last_price_dollars(self) -> str | None:
+        return self.data.last_price_dollars
 
     @property
-    def volume(self) -> int | None:
-        return self.data.volume
+    def volume_fp(self) -> str | None:
+        return self.data.volume_fp
 
     @property
-    def volume_24h(self) -> int | None:
-        return self.data.volume_24h
+    def volume_24h_fp(self) -> str | None:
+        return self.data.volume_24h_fp
 
     @property
-    def open_interest(self) -> int | None:
-        return self.data.open_interest
+    def open_interest_fp(self) -> str | None:
+        return self.data.open_interest_fp
 
     @property
-    def liquidity(self) -> int | None:
-        return self.data.liquidity
+    def liquidity_fp(self) -> str | None:
+        return self.data.liquidity_fp
 
     @property
     def open_time(self) -> str | None:
@@ -97,18 +97,10 @@ class Market:
 
     @property
     def series_ticker(self) -> str | None:
-        """Series ticker if available in the market data."""
         return self.data.series_ticker
 
     def resolve_series_ticker(self) -> str | None:
-        """Fetch series_ticker from the event API if not present in market data.
-
-        Makes an API call to look up the series via the event. Use this when
-        you need the series_ticker but it wasn't included in the market response.
-
-        Returns:
-            The series ticker, or None if it couldn't be resolved.
-        """
+        """Fetch series_ticker from the event API if not present in market data."""
         if self.data.series_ticker is not None:
             return self.data.series_ticker
         if not self.data.event_ticker:
@@ -123,11 +115,7 @@ class Market:
             return None
 
     def get_orderbook(self, *, depth: int | None = None) -> OrderbookResponse:
-        """Get the orderbook for this market.
-
-        Args:
-            depth: Number of price levels to return (1-100). None returns all levels.
-        """
+        """Get the orderbook for this market."""
         endpoint = f"/markets/{self.data.ticker}/orderbook"
         if depth:
             endpoint += f"?depth={depth}"
@@ -140,13 +128,7 @@ class Market:
         end_ts: int,
         period: CandlestickPeriod = CandlestickPeriod.ONE_HOUR,
     ) -> CandlestickResponse:
-        """Get candlestick data for this market.
-
-        Args:
-            start_ts: Start timestamp (Unix seconds).
-            end_ts: End timestamp (Unix seconds).
-            period: Candlestick period (ONE_MINUTE, ONE_HOUR, or ONE_DAY).
-        """
+        """Get candlestick data for this market."""
         series = self.resolve_series_ticker()
         if not series:
             raise ValueError(f"Market {self.data.ticker} does not have a series_ticker.")
@@ -164,15 +146,7 @@ class Market:
         cursor: str | None = None,
         fetch_all: bool = False,
     ) -> DataFrameList[TradeModel]:
-        """Get public trade history for this market.
-
-        Args:
-            min_ts: Minimum timestamp (Unix seconds).
-            max_ts: Maximum timestamp (Unix seconds).
-            limit: Maximum trades per page (default 100).
-            cursor: Pagination cursor for fetching next page.
-            fetch_all: If True, automatically fetch all pages.
-        """
+        """Get public trade history for this market."""
         return self._client.get_trades(
             ticker=self.ticker,
             min_ts=min_ts,
@@ -183,17 +157,12 @@ class Market:
         )
 
     def get_event(self) -> Event | None:
-        """Get the parent Event for this market.
-
-        Returns:
-            The Event object, or None if event_ticker is not set.
-        """
+        """Get the parent Event for this market."""
         if not self.event_ticker:
             return None
         return self._client.get_event(self.event_ticker)
 
     def __getattr__(self, name: str):
-        # Fallback for fields without explicit properties.
         return getattr(self.data, name)
 
     def __eq__(self, other: object) -> bool:
@@ -208,15 +177,14 @@ class Market:
         status = self.status.value if self.status else "?"
         parts = [f"<Market {self.ticker}", status]
 
-        # For settled markets, show result; for active, show bid/ask and last
         if self.result:
             parts.append(self.result.upper())
         else:
-            bid = self.yes_bid if self.yes_bid is not None else "?"
-            ask = self.yes_ask if self.yes_ask is not None else "?"
-            parts.append(f"{bid}/{ask}")
-            if self.last_price is not None:
-                parts.append(f"last={self.last_price}")
+            bid = self.yes_bid_dollars if self.yes_bid_dollars is not None else "?"
+            ask = self.yes_ask_dollars if self.yes_ask_dollars is not None else "?"
+            parts.append(f"${bid}/${ask}")
+            if self.last_price_dollars is not None:
+                parts.append(f"last=${self.last_price_dollars}")
 
         return " | ".join(parts) + ">"
 

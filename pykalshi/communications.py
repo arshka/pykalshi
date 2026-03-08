@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
+from ._compat import convert_legacy_kwargs, RFQ_LEGACY
 from .models import RfqModel, QuoteModel
 from .dataframe import DataFrameList
 
@@ -43,25 +44,38 @@ class Communications:
         self,
         market_ticker: str,
         *,
-        contracts: int | None = None,
+        contracts_fp: str | None = None,
         target_cost_dollars: str | None = None,
         rest_remainder: bool = False,
+        # Deprecated legacy params
+        contracts: int | None = None,
+        target_cost: int | None = None,
     ) -> RfqModel:
         """Create a Request for Quote.
 
         Args:
             market_ticker: The combo market ticker to request quotes for.
-            contracts: Number of contracts to trade.
-            target_cost_dollars: Target cost in dollars (FixedPoint string, e.g. "10.00").
-                                 Use this OR contracts, not both.
+            contracts_fp: Number of contracts to trade (fixed-point string, e.g. "10.00").
+            target_cost_dollars: Target cost in dollars (e.g. "10.00").
+                                 Use this OR contracts_fp, not both.
             rest_remainder: If True, rest any unfilled portion on the orderbook.
+            contracts: Deprecated. Integer contract count.
+            target_cost: Deprecated. Integer target cost in cents.
         """
+        _kw: dict = {
+            "contracts_fp": contracts_fp, "target_cost_dollars": target_cost_dollars,
+            "contracts": contracts, "target_cost": target_cost,
+        }
+        convert_legacy_kwargs(_kw, RFQ_LEGACY)
+        contracts_fp = _kw.get("contracts_fp")
+        target_cost_dollars = _kw.get("target_cost_dollars")
+
         body: dict = {
             "market_ticker": market_ticker.upper(),
             "rest_remainder": rest_remainder,
         }
-        if contracts is not None:
-            body["contracts"] = contracts
+        if contracts_fp is not None:
+            body["contracts_fp"] = contracts_fp
         if target_cost_dollars is not None:
             body["target_cost_dollars"] = target_cost_dollars
 
@@ -181,14 +195,23 @@ class Communications:
 class AsyncCommunications(Communications):
     """Async variant of Communications."""
 
-    async def create_rfq(self, market_ticker, *, contracts=None,  # type: ignore[override]
-                         target_cost_dollars=None, rest_remainder=False) -> RfqModel:
+    async def create_rfq(self, market_ticker, *, contracts_fp=None,  # type: ignore[override]
+                         target_cost_dollars=None, rest_remainder=False,
+                         contracts: int | None = None, target_cost: int | None = None) -> RfqModel:
+        _kw: dict = {
+            "contracts_fp": contracts_fp, "target_cost_dollars": target_cost_dollars,
+            "contracts": contracts, "target_cost": target_cost,
+        }
+        convert_legacy_kwargs(_kw, RFQ_LEGACY)
+        contracts_fp = _kw.get("contracts_fp")
+        target_cost_dollars = _kw.get("target_cost_dollars")
+
         body: dict = {
             "market_ticker": market_ticker.upper(),
             "rest_remainder": rest_remainder,
         }
-        if contracts is not None:
-            body["contracts"] = contracts
+        if contracts_fp is not None:
+            body["contracts_fp"] = contracts_fp
         if target_cost_dollars is not None:
             body["target_cost_dollars"] = target_cost_dollars
         response = await self._client.post("/communications/rfqs", body)

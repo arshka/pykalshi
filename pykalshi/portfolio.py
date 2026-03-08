@@ -1,9 +1,15 @@
 from __future__ import annotations
+from decimal import Decimal
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 from .orders import Order, AsyncOrder
 from .enums import Action, Side, OrderType, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
 from .dataframe import DataFrameList
+from ._compat import (
+    convert_legacy_kwargs,
+    PLACE_ORDER_LEGACY, AMEND_ORDER_LEGACY, DECREASE_ORDER_LEGACY,
+    BATCH_ORDER_LEGACY, ORDER_GROUP_LEGACY, TRANSFER_LEGACY,
+)
 from ._utils import normalize_ticker, normalize_tickers
 from .models import (
     OrderModel, BalanceModel, PositionModel, FillModel,
@@ -23,7 +29,7 @@ class Portfolio:
         self._client = client
 
     def get_balance(self) -> BalanceModel:
-        """Get portfolio balance. Values are in cents."""
+        """Get portfolio balance. Values are dollar strings."""
         data = self._client.get("/portfolio/balance")
         return BalanceModel.model_validate(data)
 
@@ -32,21 +38,26 @@ class Portfolio:
         ticker: str | Market,
         action: Action,
         side: Side,
-        count: int,
+        count_fp: str | None = None,
         order_type: OrderType = OrderType.LIMIT,
         *,
-        yes_price: int | None = None,
-        no_price: int | None = None,
+        yes_price_dollars: str | None = None,
+        no_price_dollars: str | None = None,
         client_order_id: str | None = None,
         time_in_force: TimeInForce | None = None,
         post_only: bool = False,
         reduce_only: bool = False,
         expiration_ts: int | None = None,
-        buy_max_cost: int | None = None,
+        buy_max_cost_dollars: str | None = None,
         self_trade_prevention: SelfTradePrevention | None = None,
         order_group_id: str | None = None,
         subaccount: int | None = None,
         cancel_order_on_pause: bool | None = None,
+        # Deprecated legacy params (integer cents/counts)
+        count: int | None = None,
+        yes_price: int | None = None,
+        no_price: int | None = None,
+        buy_max_cost: int | None = None,
     ) -> Order:
         """Place an order on a market.
 
@@ -54,32 +65,56 @@ class Portfolio:
             ticker: Market ticker string or Market object.
             action: BUY or SELL.
             side: YES or NO.
-            count: Number of contracts.
+            count_fp: Number of contracts (fixed-point string, e.g. "10.00").
             order_type: LIMIT or MARKET. Market orders are simulated as
-                        aggressive limit orders (99c buy / 1c sell).
-            yes_price: Price in cents (1-99) for the YES side.
-            no_price: Price in cents (1-99) for the NO side.
-                      Converted to yes_price internally (yes_price = 100 - no_price).
+                        aggressive limit orders ($0.99 buy / $0.01 sell).
+            yes_price_dollars: Price as dollar string (e.g. "0.45").
+            no_price_dollars: Price as dollar string. Converted to
+                yes_price_dollars internally (yes = 1.00 - no).
             client_order_id: Idempotency key. Resubmitting returns existing order.
             time_in_force: GTC (default), IOC (immediate-or-cancel), FOK (fill-or-kill).
             post_only: If True, reject order if it would take liquidity.
             reduce_only: If True, only reduce existing position, never increase.
             expiration_ts: Unix timestamp when order auto-cancels.
-            buy_max_cost: Maximum total cost in cents. Protects against slippage.
+            buy_max_cost_dollars: Maximum total cost (dollar string). Protects against slippage.
             self_trade_prevention: Behavior on self-cross (CANCEL_RESTING or CANCEL_INCOMING).
             order_group_id: Link to an order group for OCO/bracket strategies.
             subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
             cancel_order_on_pause: If True, cancel order if market is paused.
         """
+        # Convert deprecated legacy integer params
+        _kw: dict = {
+            "count_fp": count_fp, "yes_price_dollars": yes_price_dollars,
+            "no_price_dollars": no_price_dollars, "buy_max_cost_dollars": buy_max_cost_dollars,
+            "count": count, "yes_price": yes_price, "no_price": no_price, "buy_max_cost": buy_max_cost,
+        }
+        convert_legacy_kwargs(_kw, PLACE_ORDER_LEGACY)
+        count_fp = _kw.get("count_fp") or count_fp
+        yes_price_dollars = _kw.get("yes_price_dollars")
+        no_price_dollars = _kw.get("no_price_dollars")
+        buy_max_cost_dollars = _kw.get("buy_max_cost_dollars")
+
+        if count_fp is None:
+            raise ValueError("count_fp is required (or use deprecated 'count' param)")
+
+        # Extract market structure for validation when a Market object is passed
+        pls = None
+        fte = None
+        if not isinstance(ticker, str):
+            pls = getattr(ticker, 'price_level_structure', None)
+            fte = getattr(ticker, 'fractional_trading_enabled', None)
+
         order_data = self._build_order_data(
-            ticker, action, side, count, order_type,
-            yes_price=yes_price, no_price=no_price,
+            ticker, action, side, count_fp, order_type,
+            yes_price_dollars=yes_price_dollars, no_price_dollars=no_price_dollars,
             client_order_id=client_order_id, time_in_force=time_in_force,
             post_only=post_only, reduce_only=reduce_only,
-            expiration_ts=expiration_ts, buy_max_cost=buy_max_cost,
+            expiration_ts=expiration_ts, buy_max_cost_dollars=buy_max_cost_dollars,
             self_trade_prevention=self_trade_prevention,
             order_group_id=order_group_id, subaccount=subaccount,
             cancel_order_on_pause=cancel_order_on_pause,
+            price_level_structure=pls,
+            fractional_trading_enabled=fte,
         )
         response = self._client.post("/portfolio/orders", order_data)
         model = OrderModel.model_validate(response["order"])
@@ -106,71 +141,91 @@ class Portfolio:
         self,
         order_id: str,
         *,
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
+        count_fp: str | None = None,
+        yes_price_dollars: str | None = None,
+        no_price_dollars: str | None = None,
         subaccount: int | None = None,
         # Required by API but can be fetched from existing order
         ticker: str | None = None,
         action: Action | None = None,
         side: Side | None = None,
+        # Deprecated legacy params
+        count: int | None = None,
+        yes_price: int | None = None,
+        no_price: int | None = None,
     ) -> Order:
         """Amend a resting order's price or count.
 
         Args:
             order_id: ID of the order to amend.
-            count: New total contract count.
-            yes_price: New YES price in cents.
-            no_price: New NO price in cents. Converted to yes_price internally.
+            count_fp: New total contract count (fixed-point string).
+            yes_price_dollars: New YES price (dollar string).
+            no_price_dollars: New NO price (dollar string). Converted internally.
             subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
             ticker: Market ticker (fetched from order if not provided).
             action: Order action (fetched from order if not provided).
             side: Order side (fetched from order if not provided).
         """
-        if yes_price is not None and no_price is not None:
-            raise ValueError("Specify yes_price or no_price, not both")
+        _kw: dict = {
+            "count_fp": count_fp, "yes_price_dollars": yes_price_dollars,
+            "no_price_dollars": no_price_dollars,
+            "count": count, "yes_price": yes_price, "no_price": no_price,
+        }
+        convert_legacy_kwargs(_kw, AMEND_ORDER_LEGACY)
+        count_fp = _kw.get("count_fp")
+        yes_price_dollars = _kw.get("yes_price_dollars")
+        no_price_dollars = _kw.get("no_price_dollars")
 
-        if no_price is not None:
-            yes_price = 100 - no_price
+        if yes_price_dollars is not None and no_price_dollars is not None:
+            raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
+
+        if no_price_dollars is not None:
+            yes_price_dollars = str(Decimal("1") - Decimal(no_price_dollars))
 
         ticker = normalize_ticker(ticker)
 
         # Fetch original order to get required fields if not provided
-        if ticker is None or action is None or side is None or count is None:
+        if ticker is None or action is None or side is None or count_fp is None:
             original = self.get_order(order_id)
             ticker = ticker or original.ticker
             action = action or original.action
             side = side or original.side
-            if count is None:
-                count = original.remaining_count
+            if count_fp is None:
+                count_fp = original.remaining_count_fp
 
         body: dict = {
             "ticker": ticker,
             "action": action.value if isinstance(action, Action) else action,
             "side": side.value if isinstance(side, Side) else side,
-            "count": count,
+            "count_fp": count_fp,
         }
-        if yes_price is not None:
-            body["yes_price"] = yes_price
+        if yes_price_dollars is not None:
+            body["yes_price_dollars"] = yes_price_dollars
         if subaccount is not None:
             body["subaccount"] = subaccount
 
-        if "count" not in body and "yes_price" not in body:
-            raise ValueError("Must specify at least one of count, yes_price, or no_price")
+        if "count_fp" not in body and "yes_price_dollars" not in body:
+            raise ValueError("Must specify at least one of count_fp, yes_price_dollars, or no_price_dollars")
 
         response = self._client.post(f"/portfolio/orders/{order_id}/amend", body)
         model = OrderModel.model_validate(response["order"])
         return Order(self._client, model)
 
-    def decrease_order(self, order_id: str, reduce_by: int) -> Order:
+    def decrease_order(self, order_id: str, reduce_by_fp: str | None = None, *, reduce_by: int | None = None) -> Order:
         """Decrease the remaining count of a resting order.
 
         Args:
             order_id: ID of the order to decrease.
-            reduce_by: Number of contracts to reduce by.
+            reduce_by_fp: Number of contracts to reduce by (fixed-point string).
+            reduce_by: Deprecated. Integer count to reduce by.
         """
+        _kw: dict = {"reduce_by_fp": reduce_by_fp, "reduce_by": reduce_by}
+        convert_legacy_kwargs(_kw, DECREASE_ORDER_LEGACY)
+        reduce_by_fp = _kw.get("reduce_by_fp")
+        if reduce_by_fp is None:
+            raise ValueError("reduce_by_fp is required (or use deprecated 'reduce_by' param)")
         response = self._client.post(
-            f"/portfolio/orders/{order_id}/decrease", {"reduce_by": reduce_by}
+            f"/portfolio/orders/{order_id}/decrease", {"reduce_by_fp": reduce_by_fp}
         )
         model = OrderModel.model_validate(response["order"])
         return Order(self._client, model)
@@ -200,7 +255,6 @@ class Portfolio:
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
             **extra_params: Additional API parameters (e.g., subaccount).
-                           See https://docs.kalshi.com/api-reference/orders/get-orders
         """
         params = {
             "limit": limit,
@@ -296,13 +350,13 @@ class Portfolio:
         """Place multiple orders atomically.
 
         Args:
-            orders: List of order dicts with keys: ticker, action, side, count,
-                    type, yes_price/no_price, and optional advanced params.
+            orders: List of order dicts with keys: ticker, action, side, count_fp,
+                    type, yes_price_dollars/no_price_dollars, and optional advanced params.
 
         Example:
             orders = [
-                {"ticker": "KXBTC", "action": "buy", "side": "yes", "count": 10, "type": "limit", "yes_price": 45},
-                {"ticker": "KXBTC", "action": "buy", "side": "no", "count": 10, "type": "limit", "no_price": 45},
+                {"ticker": "KXBTC", "action": "buy", "side": "yes", "count_fp": "10.00", "type": "limit", "yes_price_dollars": "0.45"},
+                {"ticker": "KXBTC", "action": "buy", "side": "no", "count_fp": "10.00", "type": "limit", "no_price_dollars": "0.45"},
             ]
             results = portfolio.batch_place_orders(orders)
         """
@@ -338,11 +392,7 @@ class Portfolio:
     # --- Queue Position ---
 
     def get_queue_position(self, order_id: str) -> QueuePositionModel:
-        """Get queue position for a single resting order.
-
-        Returns 0-indexed position in the queue at the order's price level.
-        Position 0 means you're first in line to be filled.
-        """
+        """Get queue position for a single resting order."""
         response = self._client.get(f"/portfolio/orders/{order_id}/queue_position")
         return QueuePositionModel(
             order_id=order_id,
@@ -355,15 +405,7 @@ class Portfolio:
         market_tickers: list[str] | None = None,
         event_ticker: str | None = None,
     ) -> DataFrameList[QueuePositionModel]:
-        """Get queue positions for all resting orders.
-
-        Queue position represents the number of contracts that need to be
-        matched before an order receives a partial or full match.
-
-        Args:
-            market_tickers: Filter by market tickers (optional).
-            event_ticker: Filter by event ticker (optional).
-        """
+        """Get queue positions for all resting orders."""
         params: dict = {}
         if market_tickers:
             params["market_tickers"] = ",".join(normalize_tickers(market_tickers))
@@ -392,16 +434,7 @@ class Portfolio:
         fetch_all: bool = False,
         **extra_params,
     ) -> DataFrameList[SettlementModel]:
-        """Get settlement records for resolved positions.
-
-        Args:
-            ticker: Filter by market ticker.
-            event_ticker: Filter by event ticker.
-            limit: Maximum settlements per page (default 100).
-            cursor: Pagination cursor.
-            fetch_all: If True, automatically fetch all pages.
-            **extra_params: Additional API parameters.
-        """
+        """Get settlement records for resolved positions."""
         params = {
             "limit": limit,
             "ticker": normalize_ticker(ticker),
@@ -412,45 +445,43 @@ class Portfolio:
         data = self._client.paginated_get("/portfolio/settlements", "settlements", params, fetch_all)
         return DataFrameList(SettlementModel.model_validate(s) for s in data)
 
-    def get_resting_order_value(self) -> int:
-        """Get total value of all resting orders in cents.
+    def get_resting_order_value(self) -> str:
+        """Get total value of all resting orders as dollar string.
 
         NOTE: This endpoint is FCM-only (institutional accounts).
-        Regular users will get a 403 Forbidden error.
         """
         response = self._client.get("/portfolio/summary/total_resting_order_value")
-        return response.get("total_resting_order_value", 0)
+        return response.get("total_resting_order_value_dollars", "0")
 
     # --- Order Groups (Contract Rate Limiting) ---
 
     def create_order_group(
         self,
-        contracts_limit: int,
+        contracts_limit_fp: str | None = None,
+        *,
+        contracts_limit: int | None = None,
     ) -> OrderGroupModel:
         """Create an order group for rate-limiting contract matches.
 
-        Order groups limit total contracts matched across all orders in the group
-        over a rolling 15-second window. When the limit is hit, all orders in the
-        group are cancelled.
-
-        To add orders to a group, pass `order_group_id` when calling `place_order`.
-
         Args:
-            contracts_limit: Maximum contracts that can be matched in a rolling
-                15-second window. When hit, all orders in the group are cancelled.
+            contracts_limit_fp: Maximum contracts (fixed-point string) that can be
+                matched in a rolling 15-second window.
+            contracts_limit: Deprecated. Integer contracts limit.
 
         Returns:
             Created OrderGroupModel.
         """
-        body: dict = {"contracts_limit": contracts_limit}
+        _kw: dict = {"contracts_limit_fp": contracts_limit_fp, "contracts_limit": contracts_limit}
+        convert_legacy_kwargs(_kw, ORDER_GROUP_LEGACY)
+        contracts_limit_fp = _kw.get("contracts_limit_fp")
+        if contracts_limit_fp is None:
+            raise ValueError("contracts_limit_fp is required (or use deprecated 'contracts_limit' param)")
+        body: dict = {"contracts_limit_fp": contracts_limit_fp}
         response = self._client.post("/portfolio/order_groups/create", body)
         return OrderGroupModel.model_validate(response)
 
     def get_order_group(self, order_group_id: str) -> OrderGroupModel:
-        """Get an order group by ID.
-
-        Returns order group details including list of order IDs in the group.
-        """
+        """Get an order group by ID."""
         response = self._client.get(f"/portfolio/order_groups/{order_group_id}")
         response["id"] = order_group_id
         return OrderGroupModel.model_validate(response)
@@ -468,42 +499,35 @@ class Portfolio:
         )
 
     def reset_order_group(self, order_group_id: str) -> None:
-        """Reset matched contract counter for an order group.
-
-        Use this to re-enable the group after it has been triggered,
-        allowing orders to continue matching up to the contracts_limit again.
-        """
+        """Reset matched contract counter for an order group."""
         self._client.put(f"/portfolio/order_groups/{order_group_id}/reset", {})
 
     def update_order_group_limit(
         self,
         order_group_id: str,
-        contracts_limit: int,
+        contracts_limit_fp: str | None = None,
+        *,
+        contracts_limit: int | None = None,
     ) -> None:
         """Update the contracts limit for an order group.
 
-        If the new limit would immediately trigger the group (because current
-        matched contracts exceed it), all orders are cancelled and the group
-        is triggered.
-
         Args:
             order_group_id: ID of the order group.
-            contracts_limit: New maximum contracts for 15-second rolling window.
+            contracts_limit_fp: New maximum contracts (fixed-point string).
+            contracts_limit: Deprecated. Integer contracts limit.
         """
-        body: dict = {"contracts_limit": contracts_limit}
+        _kw: dict = {"contracts_limit_fp": contracts_limit_fp, "contracts_limit": contracts_limit}
+        convert_legacy_kwargs(_kw, ORDER_GROUP_LEGACY)
+        contracts_limit_fp = _kw.get("contracts_limit_fp")
+        if contracts_limit_fp is None:
+            raise ValueError("contracts_limit_fp is required (or use deprecated 'contracts_limit' param)")
+        body: dict = {"contracts_limit_fp": contracts_limit_fp}
         self._client.put(f"/portfolio/order_groups/{order_group_id}/limit", body)
 
     # --- Subaccounts ---
 
     def create_subaccount(self) -> SubaccountModel:
-        """Create a new numbered subaccount.
-
-        Subaccounts allow strategy isolation - run multiple bots
-        with separate capital pools under one API key.
-
-        Returns:
-            Created SubaccountModel with ID and number.
-        """
+        """Create a new numbered subaccount."""
         response = self._client.post("/portfolio/subaccounts", {})
         return SubaccountModel.model_validate(response.get("subaccount", response))
 
@@ -511,22 +535,27 @@ class Portfolio:
         self,
         from_subaccount_id: str,
         to_subaccount_id: str,
-        amount: int,
+        amount_dollars: str | None = None,
+        *,
+        amount: int | None = None,
     ) -> SubaccountTransferModel:
         """Transfer funds between subaccounts.
 
         Args:
             from_subaccount_id: Source subaccount ID.
             to_subaccount_id: Destination subaccount ID.
-            amount: Amount to transfer in cents.
-
-        Returns:
-            Transfer record.
+            amount_dollars: Amount to transfer (dollar string).
+            amount: Deprecated. Amount in cents.
         """
+        _kw: dict = {"amount_dollars": amount_dollars, "amount": amount}
+        convert_legacy_kwargs(_kw, TRANSFER_LEGACY)
+        amount_dollars = _kw.get("amount_dollars")
+        if amount_dollars is None:
+            raise ValueError("amount_dollars is required (or use deprecated 'amount' param)")
         body = {
             "from_subaccount_id": from_subaccount_id,
             "to_subaccount_id": to_subaccount_id,
-            "amount": amount,
+            "amount_dollars": amount_dollars,
         }
         response = self._client.post("/portfolio/subaccounts/transfer", body)
         return SubaccountTransferModel.model_validate(response.get("transfer", response))
@@ -547,14 +576,7 @@ class Portfolio:
         fetch_all: bool = False,
         **extra_params,
     ) -> DataFrameList[SubaccountTransferModel]:
-        """Get transfer history between subaccounts.
-
-        Args:
-            limit: Maximum results per page (default 100).
-            cursor: Pagination cursor for fetching next page.
-            fetch_all: If True, automatically fetch all pages.
-            **extra_params: Additional API parameters.
-        """
+        """Get transfer history between subaccounts."""
         params = {"limit": limit, "cursor": cursor, **extra_params}
         data = self._client.paginated_get(
             "/portfolio/subaccounts/transfers", "transfers", params, fetch_all
@@ -564,47 +586,104 @@ class Portfolio:
     # --- Shared validation helpers ---
 
     @staticmethod
+    def _validate_tick_size(price: Decimal, price_level_structure: str) -> None:
+        """Validate that price aligns to the market's tick size.
+
+        Raises ValueError if the price is not on a valid tick boundary.
+        """
+        if price_level_structure == "linear_cent":
+            # $0.00–$1.00, tick $0.01
+            tick = Decimal("0.01")
+            if price % tick != 0:
+                raise ValueError(
+                    f"Price {price} is not on a valid tick for linear_cent "
+                    f"(tick size $0.01)"
+                )
+        elif price_level_structure == "deci_cent":
+            # $0.00–$1.00, tick $0.001
+            tick = Decimal("0.001")
+            if price % tick != 0:
+                raise ValueError(
+                    f"Price {price} is not on a valid tick for deci_cent "
+                    f"(tick size $0.001)"
+                )
+        elif price_level_structure == "tapered_deci_cent":
+            # $0.00–$0.10: tick $0.001, $0.10–$0.90: tick $0.01, $0.90–$1.00: tick $0.001
+            if price <= Decimal("0.10") or price >= Decimal("0.90"):
+                tick = Decimal("0.001")
+            else:
+                tick = Decimal("0.01")
+            if price % tick != 0:
+                raise ValueError(
+                    f"Price {price} is not on a valid tick for tapered_deci_cent "
+                    f"(tick size ${tick} in this price range)"
+                )
+
+    @staticmethod
+    def _validate_fractional(count_fp: str, fractional_enabled: bool) -> None:
+        """Validate count_fp is whole when fractional trading is disabled."""
+        if not fractional_enabled:
+            d = Decimal(count_fp)
+            if d != int(d):
+                raise ValueError(
+                    f"Fractional trading is not enabled for this market. "
+                    f"count_fp must be a whole number, got {count_fp}"
+                )
+
+    @staticmethod
     def _build_order_data(
         ticker,
         action: Action,
         side: Side,
-        count: int,
+        count_fp: str,
         order_type: OrderType = OrderType.LIMIT,
         *,
-        yes_price=None,
-        no_price=None,
+        yes_price_dollars=None,
+        no_price_dollars=None,
         client_order_id=None,
         time_in_force=None,
         post_only=False,
         reduce_only=False,
         expiration_ts=None,
-        buy_max_cost=None,
+        buy_max_cost_dollars=None,
         self_trade_prevention=None,
         order_group_id=None,
         subaccount=None,
         cancel_order_on_pause=None,
+        price_level_structure=None,
+        fractional_trading_enabled=None,
     ) -> dict:
         """Build and validate order data dict. No I/O.
 
-        Market orders are simulated as aggressive limit orders (99c buy / 1c sell)
+        Market orders are simulated as aggressive limit orders ($0.99 buy / $0.01 sell)
         because the Kalshi API no longer supports the "market" order type.
+
+        If price_level_structure is provided, validates tick size alignment.
+        If fractional_trading_enabled is provided (False), validates count_fp is whole.
         """
-        if yes_price is not None and no_price is not None:
-            raise ValueError("Specify yes_price or no_price, not both")
+        if yes_price_dollars is not None and no_price_dollars is not None:
+            raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
 
         # Simulate market orders as aggressive limit orders
         if order_type == OrderType.MARKET:
-            if yes_price is not None or no_price is not None:
+            if yes_price_dollars is not None or no_price_dollars is not None:
                 raise ValueError("Market orders should not specify a price")
             if post_only:
                 raise ValueError("post_only is incompatible with market orders")
-            # Buy at worst acceptable price, sell at worst acceptable price
-            yes_price = 99 if action == Action.BUY else 1
-        elif yes_price is None and no_price is None:
-            raise ValueError("Limit orders require yes_price or no_price")
+            yes_price_dollars = "0.99" if action == Action.BUY else "0.01"
+        elif yes_price_dollars is None and no_price_dollars is None:
+            raise ValueError("Limit orders require yes_price_dollars or no_price_dollars")
 
-        if no_price is not None:
-            yes_price = 100 - no_price
+        if no_price_dollars is not None:
+            yes_price_dollars = str(Decimal("1") - Decimal(no_price_dollars))
+
+        # Validate tick size if market structure is known
+        if price_level_structure and yes_price_dollars is not None:
+            Portfolio._validate_tick_size(Decimal(yes_price_dollars), price_level_structure)
+
+        # Validate fractional trading
+        if fractional_trading_enabled is not None:
+            Portfolio._validate_fractional(count_fp, fractional_trading_enabled)
 
         ticker_str = ticker.upper() if isinstance(ticker, str) else ticker.ticker
 
@@ -612,9 +691,9 @@ class Portfolio:
             "ticker": ticker_str,
             "action": action.value,
             "side": side.value,
-            "count": count,
+            "count_fp": count_fp,
             "type": "limit",
-            "yes_price": yes_price,
+            "yes_price_dollars": yes_price_dollars,
         }
         if client_order_id is not None:
             order_data["client_order_id"] = client_order_id
@@ -626,8 +705,8 @@ class Portfolio:
             order_data["reduce_only"] = True
         if expiration_ts is not None:
             order_data["expiration_ts"] = expiration_ts
-        if buy_max_cost is not None:
-            order_data["buy_max_cost"] = buy_max_cost
+        if buy_max_cost_dollars is not None:
+            order_data["buy_max_cost_dollars"] = buy_max_cost_dollars
         if self_trade_prevention is not None:
             order_data["self_trade_prevention_type"] = self_trade_prevention.value
         if order_group_id is not None:
@@ -644,12 +723,14 @@ class Portfolio:
         prepared = []
         for order in orders:
             o = dict(order)
-            if "yes_price" in o and "no_price" in o:
-                raise ValueError("Specify yes_price or no_price, not both")
-            if o.get("type", "limit") == "limit" and "yes_price" not in o and "no_price" not in o:
-                raise ValueError("Limit orders require yes_price or no_price")
-            if "no_price" in o:
-                o["yes_price"] = 100 - o.pop("no_price")
+            # Convert legacy integer keys
+            convert_legacy_kwargs(o, BATCH_ORDER_LEGACY)
+            if "yes_price_dollars" in o and "no_price_dollars" in o:
+                raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
+            if o.get("type", "limit") == "limit" and "yes_price_dollars" not in o and "no_price_dollars" not in o:
+                raise ValueError("Limit orders require yes_price_dollars or no_price_dollars")
+            if "no_price_dollars" in o:
+                o["yes_price_dollars"] = str(Decimal("1") - Decimal(o.pop("no_price_dollars")))
             prepared.append(o)
         return prepared
 
@@ -666,12 +747,17 @@ class AsyncPortfolio(Portfolio):
         ticker,
         action: Action,
         side: Side,
-        count: int,
+        count_fp: str | None = None,
         order_type: OrderType = OrderType.LIMIT,
         **kwargs,
     ) -> AsyncOrder:
+        # Convert deprecated legacy integer params
+        convert_legacy_kwargs(kwargs, PLACE_ORDER_LEGACY)
+        count_fp = count_fp or kwargs.pop("count_fp", None)
+        if count_fp is None:
+            raise ValueError("count_fp is required (or use deprecated 'count' param)")
         order_data = self._build_order_data(
-            ticker, action, side, count, order_type, **kwargs
+            ticker, action, side, count_fp, order_type, **kwargs
         )
         response = await self._client.post("/portfolio/orders", order_data)
         model = OrderModel.model_validate(response["order"])
@@ -689,48 +775,66 @@ class AsyncPortfolio(Portfolio):
         self,
         order_id: str,
         *,
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
+        count_fp: str | None = None,
+        yes_price_dollars: str | None = None,
+        no_price_dollars: str | None = None,
         subaccount: int | None = None,
         ticker: str | None = None,
         action: Action | None = None,
         side: Side | None = None,
+        count: int | None = None,
+        yes_price: int | None = None,
+        no_price: int | None = None,
     ) -> AsyncOrder:
-        if yes_price is not None and no_price is not None:
-            raise ValueError("Specify yes_price or no_price, not both")
-        if no_price is not None:
-            yes_price = 100 - no_price
+        _kw: dict = {
+            "count_fp": count_fp, "yes_price_dollars": yes_price_dollars,
+            "no_price_dollars": no_price_dollars,
+            "count": count, "yes_price": yes_price, "no_price": no_price,
+        }
+        convert_legacy_kwargs(_kw, AMEND_ORDER_LEGACY)
+        count_fp = _kw.get("count_fp")
+        yes_price_dollars = _kw.get("yes_price_dollars")
+        no_price_dollars = _kw.get("no_price_dollars")
+
+        if yes_price_dollars is not None and no_price_dollars is not None:
+            raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
+        if no_price_dollars is not None:
+            yes_price_dollars = str(Decimal("1") - Decimal(no_price_dollars))
         ticker = normalize_ticker(ticker)
 
-        if ticker is None or action is None or side is None or count is None:
+        if ticker is None or action is None or side is None or count_fp is None:
             original = await self.get_order(order_id)
             ticker = ticker or original.ticker
             action = action or original.action
             side = side or original.side
-            if count is None:
-                count = original.remaining_count
+            if count_fp is None:
+                count_fp = original.remaining_count_fp
 
         body: dict = {
             "ticker": ticker,
             "action": action.value if isinstance(action, Action) else action,
             "side": side.value if isinstance(side, Side) else side,
-            "count": count,
+            "count_fp": count_fp,
         }
-        if yes_price is not None:
-            body["yes_price"] = yes_price
+        if yes_price_dollars is not None:
+            body["yes_price_dollars"] = yes_price_dollars
         if subaccount is not None:
             body["subaccount"] = subaccount
-        if "count" not in body and "yes_price" not in body:
-            raise ValueError("Must specify at least one of count, yes_price, or no_price")
+        if "count_fp" not in body and "yes_price_dollars" not in body:
+            raise ValueError("Must specify at least one of count_fp, yes_price_dollars, or no_price_dollars")
 
         response = await self._client.post(f"/portfolio/orders/{order_id}/amend", body)
         model = OrderModel.model_validate(response["order"])
         return AsyncOrder(self._client, model)
 
-    async def decrease_order(self, order_id: str, reduce_by: int) -> AsyncOrder:  # type: ignore[override]
+    async def decrease_order(self, order_id: str, reduce_by_fp: str | None = None, *, reduce_by: int | None = None) -> AsyncOrder:  # type: ignore[override]
+        _kw: dict = {"reduce_by_fp": reduce_by_fp, "reduce_by": reduce_by}
+        convert_legacy_kwargs(_kw, DECREASE_ORDER_LEGACY)
+        reduce_by_fp = _kw.get("reduce_by_fp")
+        if reduce_by_fp is None:
+            raise ValueError("reduce_by_fp is required (or use deprecated 'reduce_by' param)")
         response = await self._client.post(
-            f"/portfolio/orders/{order_id}/decrease", {"reduce_by": reduce_by}
+            f"/portfolio/orders/{order_id}/decrease", {"reduce_by_fp": reduce_by_fp}
         )
         model = OrderModel.model_validate(response["order"])
         return AsyncOrder(self._client, model)
@@ -827,12 +931,17 @@ class AsyncPortfolio(Portfolio):
         data = await self._client.paginated_get("/portfolio/settlements", "settlements", params, fetch_all)
         return DataFrameList(SettlementModel.model_validate(s) for s in data)
 
-    async def get_resting_order_value(self) -> int:  # type: ignore[override]
+    async def get_resting_order_value(self) -> str:  # type: ignore[override]
         response = await self._client.get("/portfolio/summary/total_resting_order_value")
-        return response.get("total_resting_order_value", 0)
+        return response.get("total_resting_order_value_dollars", "0")
 
-    async def create_order_group(self, contracts_limit: int) -> OrderGroupModel:  # type: ignore[override]
-        response = await self._client.post("/portfolio/order_groups/create", {"contracts_limit": contracts_limit})
+    async def create_order_group(self, contracts_limit_fp: str | None = None, *, contracts_limit: int | None = None) -> OrderGroupModel:  # type: ignore[override]
+        _kw: dict = {"contracts_limit_fp": contracts_limit_fp, "contracts_limit": contracts_limit}
+        convert_legacy_kwargs(_kw, ORDER_GROUP_LEGACY)
+        contracts_limit_fp = _kw.get("contracts_limit_fp")
+        if contracts_limit_fp is None:
+            raise ValueError("contracts_limit_fp is required (or use deprecated 'contracts_limit' param)")
+        response = await self._client.post("/portfolio/order_groups/create", {"contracts_limit_fp": contracts_limit_fp})
         return OrderGroupModel.model_validate(response)
 
     async def get_order_group(self, order_group_id: str) -> OrderGroupModel:  # type: ignore[override]
@@ -850,15 +959,25 @@ class AsyncPortfolio(Portfolio):
     async def reset_order_group(self, order_group_id: str) -> None:  # type: ignore[override]
         await self._client.put(f"/portfolio/order_groups/{order_group_id}/reset", {})
 
-    async def update_order_group_limit(self, order_group_id: str, contracts_limit: int) -> None:  # type: ignore[override]
-        await self._client.put(f"/portfolio/order_groups/{order_group_id}/limit", {"contracts_limit": contracts_limit})
+    async def update_order_group_limit(self, order_group_id: str, contracts_limit_fp: str | None = None, *, contracts_limit: int | None = None) -> None:  # type: ignore[override]
+        _kw: dict = {"contracts_limit_fp": contracts_limit_fp, "contracts_limit": contracts_limit}
+        convert_legacy_kwargs(_kw, ORDER_GROUP_LEGACY)
+        contracts_limit_fp = _kw.get("contracts_limit_fp")
+        if contracts_limit_fp is None:
+            raise ValueError("contracts_limit_fp is required (or use deprecated 'contracts_limit' param)")
+        await self._client.put(f"/portfolio/order_groups/{order_group_id}/limit", {"contracts_limit_fp": contracts_limit_fp})
 
     async def create_subaccount(self) -> SubaccountModel:  # type: ignore[override]
         response = await self._client.post("/portfolio/subaccounts", {})
         return SubaccountModel.model_validate(response.get("subaccount", response))
 
-    async def transfer_between_subaccounts(self, from_subaccount_id, to_subaccount_id, amount) -> SubaccountTransferModel:  # type: ignore[override]
-        body = {"from_subaccount_id": from_subaccount_id, "to_subaccount_id": to_subaccount_id, "amount": amount}
+    async def transfer_between_subaccounts(self, from_subaccount_id, to_subaccount_id, amount_dollars=None, *, amount: int | None = None) -> SubaccountTransferModel:  # type: ignore[override]
+        _kw: dict = {"amount_dollars": amount_dollars, "amount": amount}
+        convert_legacy_kwargs(_kw, TRANSFER_LEGACY)
+        amount_dollars = _kw.get("amount_dollars")
+        if amount_dollars is None:
+            raise ValueError("amount_dollars is required (or use deprecated 'amount' param)")
+        body = {"from_subaccount_id": from_subaccount_id, "to_subaccount_id": to_subaccount_id, "amount_dollars": amount_dollars}
         response = await self._client.post("/portfolio/subaccounts/transfer", body)
         return SubaccountTransferModel.model_validate(response.get("transfer", response))
 

@@ -25,7 +25,7 @@ portfolio = client.portfolio
 
 # Check balance first
 balance = portfolio.get_balance()
-print(f"Available balance: ${balance.balance / 100:.2f}")
+print(f"Available balance: ${balance.balance_dollars}")
 
 # --- Place a Limit Order ---
 
@@ -38,7 +38,7 @@ if not markets:
 market = markets[0]
 print(f"\nMarket: {market.ticker}")
 print(f"  {market.title}")
-print(f"  Current: {market.yes_bid}¢ bid / {market.yes_ask}¢ ask")
+print(f"  Current: ${market.yes_bid_dollars} bid / ${market.yes_ask_dollars} ask")
 
 # Place a limit order (uncomment to execute)
 # try:
@@ -46,12 +46,12 @@ print(f"  Current: {market.yes_bid}¢ bid / {market.yes_ask}¢ ask")
 #         market,
 #         action=Action.BUY,
 #         side=Side.YES,
-#         count=10,              # 10 contracts
-#         yes_price=45,          # 45 cents per contract
+#         count_fp="10.00",              # 10 contracts
+#         yes_price_dollars="0.45",      # $0.45 per contract
 #     )
 #     print(f"\nOrder placed: {order.order_id}")
 #     print(f"  Status: {order.status}")
-#     print(f"  Remaining: {order.remaining_count} contracts")
+#     print(f"  Remaining: {order.remaining_count_fp} contracts")
 # except InsufficientFundsError:
 #     print("Not enough balance")
 # except OrderRejectedError as e:
@@ -66,7 +66,7 @@ print(f"  Current: {market.yes_bid}¢ bid / {market.yes_ask}¢ ask")
 #         market,
 #         action=Action.BUY,
 #         side=Side.YES,
-#         count=5,
+#         count_fp="5.00",
 #         order_type=OrderType.MARKET,
 #     )
 #     print(f"Market order filled: {order.order_id}")
@@ -81,8 +81,8 @@ orders = portfolio.get_orders(status=OrderStatus.RESTING)
 print(f"\nYou have {len(orders)} open orders")
 
 for order in orders[:3]:
-    print(f"  {order.order_id}: {order.action} {order.initial_count}x {order.ticker} @ {order.yes_price}¢")
-    print(f"    Status: {order.status}, Filled: {order.fill_count}")
+    print(f"  {order.order_id}: {order.action} {order.initial_count_fp}x {order.ticker} @ ${order.yes_price_dollars}")
+    print(f"    Status: {order.status}, Filled: {order.fill_count_fp}")
 
 # Cancel an order (uncomment to execute)
 # if orders:
@@ -93,8 +93,8 @@ for order in orders[:3]:
 # Amend an order (uncomment to execute)
 # if orders:
 #     order = orders[0]
-#     modified = order.amend(yes_price=50, count=20)
-#     print(f"Amended order: new price {modified.yes_price}¢, new count {modified.initial_count}")
+#     modified = order.amend(yes_price_dollars="0.50", count_fp="20.00")
+#     print(f"Amended order: new price ${modified.yes_price_dollars}, new count {modified.initial_count_fp}")
 
 
 # --- Sell / Close Position ---
@@ -102,12 +102,13 @@ for order in orders[:3]:
 # To close a YES position, sell YES contracts
 # positions = portfolio.get_positions()
 # for pos in positions:
-#     if pos.position > 0:  # Long YES position
+#     from decimal import Decimal
+#     if Decimal(pos.position_fp) > 0:  # Long YES position
 #         order = portfolio.place_order(
 #             pos.ticker,
 #             action=Action.SELL,
 #             side=Side.YES,
-#             count=pos.position,
+#             count_fp=pos.position_fp,
 #             order_type=OrderType.MARKET,
 #         )
 #         print(f"Closed position in {pos.ticker}")
@@ -122,7 +123,7 @@ for order in orders[:3]:
 #     market,
 #     action=Action.BUY,
 #     side=Side.YES,
-#     count=10,
-#     yes_price=market.yes_bid,  # Bid at current best bid
-#     post_only=True,            # Reject if this would cross the spread
+#     count_fp="10.00",
+#     yes_price_dollars=market.yes_bid_dollars,  # Bid at current best bid
+#     post_only=True,                            # Reject if this would cross the spread
 # )

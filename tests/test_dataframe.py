@@ -44,16 +44,16 @@ class TestToDataFrame:
         from pykalshi import to_dataframe
 
         positions = [
-            PositionModel(ticker="AAPL-YES", position=10, market_exposure=500),
-            PositionModel(ticker="GOOG-NO", position=-5, market_exposure=250),
+            PositionModel(ticker="AAPL-YES", position_fp="10.00", market_exposure_dollars="5.00"),
+            PositionModel(ticker="GOOG-NO", position_fp="-5.00", market_exposure_dollars="2.50"),
         ]
 
         df = to_dataframe(positions)
 
         assert len(df) == 2
         assert list(df["ticker"]) == ["AAPL-YES", "GOOG-NO"]
-        assert list(df["position"]) == [10, -5]
-        assert list(df["market_exposure"]) == [500, 250]
+        assert list(df["position_fp"]) == ["10.00", "-5.00"]
+        assert list(df["market_exposure_dollars"]) == ["5.00", "2.50"]
 
     def test_fill_models(self):
         """Convert list of FillModel to DataFrame."""
@@ -66,9 +66,9 @@ class TestToDataFrame:
                 order_id="o1",
                 side=Side.YES,
                 action=Action.BUY,
-                count=5,
-                yes_price=45,
-                no_price=55,
+                count_fp="5.00",
+                yes_price_dollars="0.45",
+                no_price_dollars="0.55",
             ),
         ]
 
@@ -76,16 +76,16 @@ class TestToDataFrame:
 
         assert len(df) == 1
         assert df.iloc[0]["ticker"] == "BTC-50K"
-        assert df.iloc[0]["count"] == 5
-        assert df.iloc[0]["yes_price"] == 45
+        assert df.iloc[0]["count_fp"] == "5.00"
+        assert df.iloc[0]["yes_price_dollars"] == "0.45"
 
     def test_market_models(self):
         """Convert list of MarketModel to DataFrame."""
         from pykalshi import to_dataframe
 
         markets = [
-            MarketModel(ticker="KXBTC-24", title="BTC > 50K", yes_bid=45, yes_ask=47),
-            MarketModel(ticker="KXETH-24", title="ETH > 3K", yes_bid=60, yes_ask=62),
+            MarketModel(ticker="KXBTC-24", title="BTC > 50K", yes_bid_dollars="0.45", yes_ask_dollars="0.47"),
+            MarketModel(ticker="KXETH-24", title="ETH > 3K", yes_bid_dollars="0.60", yes_ask_dollars="0.62"),
         ]
 
         df = to_dataframe(markets)
@@ -93,7 +93,7 @@ class TestToDataFrame:
         assert len(df) == 2
         assert "ticker" in df.columns
         assert "title" in df.columns
-        assert "yes_bid" in df.columns
+        assert "yes_bid_dollars" in df.columns
 
     def test_candlestick_response(self):
         """Convert CandlestickResponse to DataFrame with flattened price data."""
@@ -104,15 +104,15 @@ class TestToDataFrame:
             candlesticks=[
                 Candlestick(
                     end_period_ts=1700000000,
-                    volume=100,
-                    open_interest=500,
-                    price=PriceData(open=45, high=48, low=44, close=47),
+                    volume_fp="100.00",
+                    open_interest_fp="500.00",
+                    price=PriceData(open_dollars="0.45", high_dollars="0.48", low_dollars="0.44", close_dollars="0.47"),
                 ),
                 Candlestick(
                     end_period_ts=1700003600,
-                    volume=150,
-                    open_interest=520,
-                    price=PriceData(open=47, high=50, low=46, close=49),
+                    volume_fp="150.00",
+                    open_interest_fp="520.00",
+                    price=PriceData(open_dollars="0.47", high_dollars="0.50", low_dollars="0.46", close_dollars="0.49"),
                 ),
             ],
         )
@@ -122,12 +122,12 @@ class TestToDataFrame:
         assert len(df) == 2
         assert "ticker" in df.columns
         assert "timestamp" in df.columns
-        assert "open" in df.columns
-        assert "high" in df.columns
-        assert "low" in df.columns
-        assert "close" in df.columns
-        assert df.iloc[0]["open"] == 45
-        assert df.iloc[1]["close"] == 49
+        assert "open_dollars" in df.columns
+        assert "high_dollars" in df.columns
+        assert "low_dollars" in df.columns
+        assert "close_dollars" in df.columns
+        assert df.iloc[0]["open_dollars"] == "0.45"
+        assert df.iloc[1]["close_dollars"] == "0.49"
 
     def test_candlestick_response_method(self):
         """CandlestickResponse has .to_dataframe() method."""
@@ -136,9 +136,9 @@ class TestToDataFrame:
             candlesticks=[
                 Candlestick(
                     end_period_ts=1700000000,
-                    volume=100,
-                    open_interest=500,
-                    price=PriceData(open=45, high=48, low=44, close=47),
+                    volume_fp="100.00",
+                    open_interest_fp="500.00",
+                    price=PriceData(open_dollars="0.45", high_dollars="0.48", low_dollars="0.44", close_dollars="0.47"),
                 ),
             ],
         )
@@ -152,7 +152,7 @@ class TestToDataFrame:
         """Single model returns single-row DataFrame."""
         from pykalshi import to_dataframe
 
-        position = PositionModel(ticker="TEST", position=10)
+        position = PositionModel(ticker="TEST", position_fp="10.00")
         df = to_dataframe(position)
 
         assert len(df) == 1
@@ -178,8 +178,8 @@ class TestToDataFrame:
 
         response = OrderbookResponse(
             orderbook=Orderbook(
-                yes=[(45, 100), (44, 50), (43, 25)],
-                no=[(55, 75), (56, 30)],
+                yes_dollars=[("0.45", "100.00"), ("0.44", "50.00"), ("0.43", "25.00")],
+                no_dollars=[("0.55", "75.00"), ("0.56", "30.00")],
             )
         )
 
@@ -187,15 +187,15 @@ class TestToDataFrame:
 
         assert len(df) == 5
         assert set(df["side"]) == {"yes", "no"}
-        assert "price" in df.columns
-        assert "quantity" in df.columns
+        assert "price_dollars" in df.columns
+        assert "quantity_fp" in df.columns
 
     def test_orderbook_response_method(self):
         """OrderbookResponse has .to_dataframe() method."""
         response = OrderbookResponse(
             orderbook=Orderbook(
-                yes=[(45, 100)],
-                no=[(55, 75)],
+                yes_dollars=[("0.45", "100.00")],
+                no_dollars=[("0.55", "75.00")],
             )
         )
 
@@ -248,8 +248,8 @@ class TestDataFrameList:
         from pykalshi import DataFrameList
 
         positions = DataFrameList([
-            PositionModel(ticker="A", position=10),
-            PositionModel(ticker="B", position=-5),
+            PositionModel(ticker="A", position_fp="10.00"),
+            PositionModel(ticker="B", position_fp="-5.00"),
         ])
 
         df = positions.to_dataframe()

@@ -196,18 +196,18 @@ class TestGetTrades:
                 {
                     "trade_id": "t-001",
                     "ticker": "KXTEST-A",
-                    "count": 10,
-                    "yes_price": 55,
-                    "no_price": 45,
+                    "count_fp": "10.00",
+                    "yes_price_dollars": "0.55",
+                    "no_price_dollars": "0.45",
                     "taker_side": "yes",
                     "ts": 1704067200,
                 },
                 {
                     "trade_id": "t-002",
                     "ticker": "KXTEST-A",
-                    "count": 5,
-                    "yes_price": 56,
-                    "no_price": 44,
+                    "count_fp": "5.00",
+                    "yes_price_dollars": "0.56",
+                    "no_price_dollars": "0.44",
                     "taker_side": "no",
                     "ts": 1704067201,
                 },
@@ -219,8 +219,8 @@ class TestGetTrades:
 
         assert len(trades) == 2
         assert trades[0].trade_id == "t-001"
-        assert trades[0].count == 10
-        assert trades[0].yes_price == 55
+        assert trades[0].count_fp == "10.00"
+        assert trades[0].yes_price_dollars == "0.55"
         assert trades[0].taker_side == "yes"
         client._session.request.assert_called_with(
             "GET",
@@ -253,11 +253,11 @@ class TestGetTrades:
         """Test trades pagination with fetch_all."""
         client._session.request.side_effect = [
             mock_response({
-                "trades": [{"trade_id": "t1", "ticker": "X", "count": 1, "yes_price": 50, "no_price": 50}],
+                "trades": [{"trade_id": "t1", "ticker": "X", "count_fp": "1.00", "yes_price_dollars": "0.50", "no_price_dollars": "0.50"}],
                 "cursor": "page2",
             }),
             mock_response({
-                "trades": [{"trade_id": "t2", "ticker": "X", "count": 1, "yes_price": 50, "no_price": 50}],
+                "trades": [{"trade_id": "t2", "ticker": "X", "count_fp": "1.00", "yes_price_dollars": "0.50", "no_price_dollars": "0.50"}],
                 "cursor": "",
             }),
         ]
@@ -280,9 +280,9 @@ class TestBatchCandlesticks:
                     "candlesticks": [
                         {
                             "end_period_ts": 1704067200,
-                            "volume": 100,
-                            "open_interest": 500,
-                            "price": {"open": 50, "high": 55, "low": 48, "close": 53},
+                            "volume_fp": "100.00",
+                            "open_interest_fp": "500.00",
+                            "price": {"open_dollars": "0.50", "high_dollars": "0.55", "low_dollars": "0.48", "close_dollars": "0.53"},
                         }
                     ],
                 },
@@ -291,9 +291,9 @@ class TestBatchCandlesticks:
                     "candlesticks": [
                         {
                             "end_period_ts": 1704067200,
-                            "volume": 200,
-                            "open_interest": 300,
-                            "price": {"open": 60, "high": 65, "low": 58, "close": 62},
+                            "volume_fp": "200.00",
+                            "open_interest_fp": "300.00",
+                            "price": {"open_dollars": "0.60", "high_dollars": "0.65", "low_dollars": "0.58", "close_dollars": "0.62"},
                         }
                     ],
                 },
@@ -311,7 +311,7 @@ class TestBatchCandlesticks:
         assert "TICK2" in result
         assert result["TICK1"].ticker == "TICK1"
         assert len(result["TICK1"].candlesticks) == 1
-        assert result["TICK1"].candlesticks[0].volume == 100
+        assert result["TICK1"].candlesticks[0].volume_fp == "100.00"
 
         # Verify GET request with query params
         call_args = client._session.request.call_args

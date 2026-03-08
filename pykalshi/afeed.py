@@ -32,7 +32,7 @@ class AsyncFeed:
         async with client.feed() as feed:
             @feed.on("ticker")
             def handle(msg):
-                print(msg.market_ticker, msg.yes_bid)
+                print(msg.market_ticker, msg.yes_bid_dollars)
 
             feed.subscribe("ticker", market_ticker="KXBTC-26JAN")
 
