@@ -33,11 +33,10 @@ def stream_ticker():
     with Feed(client) as feed:
         @feed.on("ticker")
         def handle_ticker(msg: TickerMessage):
-            print(f"[Ticker] {msg.market_ticker}: {msg.yes_bid}/{msg.yes_ask} (vol: {msg.volume})")
+            print(f"[Ticker] {msg.market_ticker}: ${msg.yes_bid_dollars}/${msg.yes_ask_dollars} (vol: {msg.volume_fp})")
 
         feed.subscribe("ticker", market_ticker=TICKER)
 
-        # Keep running until interrupted
         try:
             while True:
                 time.sleep(1)
@@ -49,7 +48,6 @@ def stream_orderbook():
     """Stream and maintain a local orderbook."""
     print("Streaming orderbook (Ctrl+C to stop)...\n")
 
-    # OrderbookManager maintains local state from WebSocket updates
     books: dict[str, OrderbookManager] = {}
 
     with Feed(client) as feed:
@@ -57,19 +55,17 @@ def stream_orderbook():
         def handle_orderbook(msg):
             ticker = msg.market_ticker
 
-            # Create manager for this ticker if needed
             if ticker not in books:
                 books[ticker] = OrderbookManager(ticker)
 
             book = books[ticker]
 
-            # Apply snapshot or delta
             if isinstance(msg, OrderbookSnapshotMessage):
-                book.apply_snapshot(msg.yes, msg.no)
+                book.apply_snapshot(msg.yes_dollars, msg.no_dollars)
                 print(f"[Snapshot] {ticker}: {len(book.yes)} yes levels, {len(book.no)} no levels")
             elif isinstance(msg, OrderbookDeltaMessage):
-                book.apply_delta(msg.side, msg.price, msg.delta)
-                print(f"[Delta] {ticker}: best_bid={book.best_bid}, best_ask={book.best_ask}, spread={book.spread}")
+                book.apply_delta(msg.side, msg.price_dollars, msg.delta_fp)
+                print(f"[Delta] {ticker}: best_bid=${book.best_bid}, best_ask=${book.best_ask}, spread=${book.spread}")
 
         feed.subscribe("orderbook_delta", market_ticker=TICKER)
 
@@ -88,7 +84,7 @@ def stream_trades():
         @feed.on("trade")
         def handle_trade(msg: TradeMessage):
             ticker = msg.market_ticker or msg.ticker
-            print(f"[Trade] {ticker}: {msg.count}x @ {msg.yes_price}¢ ({msg.taker_side})")
+            print(f"[Trade] {ticker}: {msg.count_fp}x @ ${msg.yes_price_dollars} ({msg.taker_side})")
 
         feed.subscribe("trade", market_ticker=TICKER)
 
@@ -106,7 +102,7 @@ def stream_multiple():
     with Feed(client) as feed:
         @feed.on("ticker")
         def handle_ticker(msg: TickerMessage):
-            print(f"[Ticker] {msg.market_ticker}: {msg.yes_bid}/{msg.yes_ask}")
+            print(f"[Ticker] {msg.market_ticker}: ${msg.yes_bid_dollars}/${msg.yes_ask_dollars}")
 
         @feed.on("orderbook_delta")
         def handle_orderbook(msg):
@@ -115,7 +111,7 @@ def stream_multiple():
         @feed.on("trade")
         def handle_trade(msg: TradeMessage):
             ticker = msg.market_ticker or msg.ticker
-            print(f"[Trade] {ticker}: {msg.count}x @ {msg.yes_price}¢")
+            print(f"[Trade] {ticker}: {msg.count_fp}x @ ${msg.yes_price_dollars}")
 
         feed.subscribe("ticker", market_ticker=TICKER)
         feed.subscribe("orderbook_delta", market_ticker=TICKER)
@@ -135,9 +131,8 @@ def stream_portfolio():
     with Feed(client) as feed:
         @feed.on("fill")
         def handle_fill(msg: FillMessage):
-            print(f"[Fill] {msg.action} {msg.count}x {msg.ticker} @ {msg.yes_price}¢")
+            print(f"[Fill] {msg.action} {msg.count_fp}x {msg.ticker} @ ${msg.yes_price_dollars}")
 
-        # Subscribe to your fills (no market filter needed)
         feed.subscribe("fill")
 
         try:
@@ -148,7 +143,6 @@ def stream_portfolio():
 
 
 if __name__ == "__main__":
-    # Choose which stream to run:
     stream_ticker()
     # stream_orderbook()
     # stream_trades()

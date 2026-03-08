@@ -20,22 +20,22 @@ client = KalshiClient.from_env()
 
 portfolio = client.portfolio
 
-# Check balance (values in cents)
+# Check balance (values are dollar strings)
 balance = portfolio.get_balance()
-print(f"Balance: ${balance.balance / 100:.2f}")
-print(f"Portfolio value: ${balance.portfolio_value / 100:.2f}")
+print(f"Balance: ${balance.balance_dollars}")
+print(f"Portfolio value: ${balance.portfolio_value_dollars}")
 
 # View positions
 positions = portfolio.get_positions()
 print(f"\nYou have {len(positions)} open positions")
 for pos in positions[:5]:  # Show first 5
-    print(f"  {pos.ticker}: {pos.position} contracts @ ${pos.market_exposure / 100:.2f} exposure")
+    print(f"  {pos.ticker}: {pos.position_fp} contracts @ ${pos.market_exposure_dollars} exposure")
 
 # View recent fills
 fills = portfolio.get_fills(limit=5)
 print(f"\nRecent fills:")
 for fill in fills:
-    print(f"  {fill.ticker}: {fill.action} {fill.count}x @ {fill.yes_price}¢")
+    print(f"  {fill.ticker}: {fill.action} {fill.count_fp}x @ ${fill.yes_price_dollars}")
 
 # --- Markets ---
 
@@ -44,21 +44,21 @@ markets = client.get_markets(status=MarketStatus.OPEN, limit=10)
 print(f"\n{len(markets)} open markets:")
 for market in markets[:5]:
     print(f"  {market.ticker}: {market.title}")
-    print(f"    Yes: {market.yes_bid}¢ bid / {market.yes_ask}¢ ask")
+    print(f"    Yes: ${market.yes_bid_dollars} bid / ${market.yes_ask_dollars} ask")
 
 # Get a specific market
 # market = client.get_market("KXBTC-25JAN15-B100000")
 # print(f"\n{market.title}")
 # print(f"  Status: {market.status}")
-# print(f"  Volume: {market.volume} contracts")
+# print(f"  Volume: {market.volume_fp} contracts")
 
 # Get orderbook
 if markets:
     market = markets[0]
     orderbook = market.get_orderbook()
     print(f"\nOrderbook for {market.ticker}:")
-    yes_levels = orderbook.orderbook.yes or []
-    no_levels = orderbook.orderbook.no or []
+    yes_levels = orderbook.orderbook.yes_dollars or []
+    no_levels = orderbook.orderbook.no_dollars or []
     print(f"  Yes bids: {len(yes_levels)} levels")
     print(f"  No bids: {len(no_levels)} levels")
 

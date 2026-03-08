@@ -48,24 +48,24 @@ class Order:
         return self.data.type
 
     @property
-    def yes_price(self) -> int | None:
-        return self.data.yes_price
+    def yes_price_dollars(self) -> str | None:
+        return self.data.yes_price_dollars
 
     @property
-    def no_price(self) -> int | None:
-        return self.data.no_price
+    def no_price_dollars(self) -> str | None:
+        return self.data.no_price_dollars
 
     @property
-    def initial_count(self) -> int | None:
-        return self.data.initial_count
+    def initial_count_fp(self) -> str | None:
+        return self.data.initial_count_fp
 
     @property
-    def fill_count(self) -> int | None:
-        return self.data.fill_count
+    def fill_count_fp(self) -> str | None:
+        return self.data.fill_count_fp
 
     @property
-    def remaining_count(self) -> int | None:
-        return self.data.remaining_count
+    def remaining_count_fp(self) -> str | None:
+        return self.data.remaining_count_fp
 
     @property
     def created_time(self) -> str | None:
@@ -86,25 +86,25 @@ class Order:
     def amend(
         self,
         *,
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
+        count_fp: str | None = None,
+        yes_price_dollars: str | None = None,
+        no_price_dollars: str | None = None,
     ) -> Order:
         """Amend this order's price or count.
 
         Args:
-            count: New total contract count.
-            yes_price: New YES price in cents.
-            no_price: New NO price in cents (converted to yes_price internally).
+            count_fp: New total contract count (fixed-point string).
+            yes_price_dollars: New YES price (dollar string).
+            no_price_dollars: New NO price (dollar string, converted to yes internally).
 
         Returns:
             Self with updated data.
         """
         updated = self._client.portfolio.amend_order(
             self.order_id,
-            count=count if count is not None else self.remaining_count,
-            yes_price=yes_price,
-            no_price=no_price,
+            count_fp=count_fp if count_fp is not None else self.remaining_count_fp,
+            yes_price_dollars=yes_price_dollars,
+            no_price_dollars=no_price_dollars,
             # Pass existing order data to avoid re-fetch
             ticker=self.ticker,
             action=self.action,
@@ -113,16 +113,16 @@ class Order:
         self.data = updated.data
         return self
 
-    def decrease(self, reduce_by: int) -> Order:
+    def decrease(self, reduce_by_fp: str) -> Order:
         """Decrease the remaining count of this order.
 
         Args:
-            reduce_by: Number of contracts to reduce by.
+            reduce_by_fp: Number of contracts to reduce by (fixed-point string).
 
         Returns:
             Self with updated data.
         """
-        updated = self._client.portfolio.decrease_order(self.order_id, reduce_by)
+        updated = self._client.portfolio.decrease_order(self.order_id, reduce_by_fp)
         self.data = updated.data
         return self
 
@@ -177,10 +177,10 @@ class Order:
     def __repr__(self) -> str:
         action = self.action.value.upper() if self.action else "?"
         side = self.side.value.upper() if self.side else "?"
-        price = self.yes_price if self.yes_price is not None else self.no_price
-        filled = self.fill_count or 0
-        total = self.initial_count or 0
-        return f"<Order {self.ticker} | {action} {side} @{price} | {filled}/{total} | {self.status.value}>"
+        price = self.yes_price_dollars if self.yes_price_dollars is not None else self.no_price_dollars
+        filled = self.fill_count_fp or "0"
+        total = self.initial_count_fp or "0"
+        return f"<Order {self.ticker} | {action} {side} @${price} | {filled}/{total} | {self.status.value}>"
 
     def _repr_html_(self) -> str:
         from ._repr import order_html
@@ -198,15 +198,15 @@ class AsyncOrder(Order):
     async def amend(  # type: ignore[override]
         self,
         *,
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
+        count_fp: str | None = None,
+        yes_price_dollars: str | None = None,
+        no_price_dollars: str | None = None,
     ) -> AsyncOrder:
         updated = await self._client.portfolio.amend_order(
             self.order_id,
-            count=count if count is not None else self.remaining_count,
-            yes_price=yes_price,
-            no_price=no_price,
+            count_fp=count_fp if count_fp is not None else self.remaining_count_fp,
+            yes_price_dollars=yes_price_dollars,
+            no_price_dollars=no_price_dollars,
             ticker=self.ticker,
             action=self.action,
             side=self.side,
@@ -214,8 +214,8 @@ class AsyncOrder(Order):
         self.data = updated.data
         return self
 
-    async def decrease(self, reduce_by: int) -> AsyncOrder:  # type: ignore[override]
-        updated = await self._client.portfolio.decrease_order(self.order_id, reduce_by)
+    async def decrease(self, reduce_by_fp: str) -> AsyncOrder:  # type: ignore[override]
+        updated = await self._client.portfolio.decrease_order(self.order_id, reduce_by_fp)
         self.data = updated.data
         return self
 

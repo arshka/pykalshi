@@ -17,10 +17,10 @@ from pykalshi.enums import Action, Side, OrderStatus
 
 
 def test_balance_model_validation():
-    data = {"balance": 1000, "portfolio_value": 2000}
+    data = {"balance_dollars": "10.00", "portfolio_value_dollars": "20.00"}
     model = BalanceModel.model_validate(data)
-    assert model.balance == 1000
-    assert model.portfolio_value == 2000
+    assert model.balance_dollars == "10.00"
+    assert model.portfolio_value_dollars == "20.00"
 
 
 def test_order_model_parsing():
@@ -29,8 +29,8 @@ def test_order_model_parsing():
         "ticker": "TEST",
         "action": "buy",
         "side": "yes",
-        "count": 10,
-        "price": 50,
+        "initial_count_fp": "10.00",
+        "yes_price_dollars": "0.50",
         "status": "resting",
         "created_time": "2023-01-01T00:00:00Z",
     }
@@ -46,36 +46,36 @@ def test_market_model_validation():
         "ticker": "TEST-1",
         "title": "Will it rain?",
         "status": "open",
-        "yes_bid": 10,
-        "yes_ask": 12,
+        "yes_bid_dollars": "0.10",
+        "yes_ask_dollars": "0.12",
         "expiration_time": "2023-12-31T23:59:59Z",
     }
     model = MarketModel.model_validate(data)
     assert model.ticker == "TEST-1"
-    assert model.yes_bid == 10
+    assert model.yes_bid_dollars == "0.10"
 
 
 def test_invalid_data_raises_error():
     with pytest.raises(ValueError):
-        BalanceModel.model_validate({"balance": "not_an_int"})
+        BalanceModel.model_validate({"not_a_field": "bad"})
 
 
 def test_fill_model_fee_cost_is_dollar_string():
-    """Verify fee_cost is kept as dollar amount string."""
+    """Verify fee_cost_dollars is kept as dollar amount string."""
     data = {
         "trade_id": "t1",
         "ticker": "TEST",
         "order_id": "o1",
         "side": "yes",
         "action": "buy",
-        "count": 1,
-        "yes_price": 50,
-        "no_price": 50,
-        "fee_cost": "0.3200",
+        "count_fp": "1.00",
+        "yes_price_dollars": "0.50",
+        "no_price_dollars": "0.50",
+        "fee_cost_dollars": "0.3200",
     }
     model = FillModel.model_validate(data)
-    assert model.fee_cost == "0.3200"
-    assert isinstance(model.fee_cost, str)
+    assert model.fee_cost_dollars == "0.3200"
+    assert isinstance(model.fee_cost_dollars, str)
 
 
 # --- Exchange Models ---
@@ -216,9 +216,9 @@ def test_trade_model():
     data = {
         "trade_id": "t-001",
         "ticker": "KXTEST",
-        "count": 10,
-        "yes_price": 55,
-        "no_price": 45,
+        "count_fp": "10.00",
+        "yes_price_dollars": "0.55",
+        "no_price_dollars": "0.45",
         "taker_side": "yes",
         "created_time": "2024-01-01T12:00:00Z",
         "ts": 1704067200,
@@ -226,9 +226,9 @@ def test_trade_model():
     model = TradeModel.model_validate(data)
     assert model.trade_id == "t-001"
     assert model.ticker == "KXTEST"
-    assert model.count == 10
-    assert model.yes_price == 55
-    assert model.no_price == 45
+    assert model.count_fp == "10.00"
+    assert model.yes_price_dollars == "0.55"
+    assert model.no_price_dollars == "0.45"
     assert model.taker_side == "yes"
 
 
@@ -237,9 +237,9 @@ def test_trade_model_minimal():
     data = {
         "trade_id": "t-002",
         "ticker": "TEST",
-        "count": 1,
-        "yes_price": 50,
-        "no_price": 50,
+        "count_fp": "1.00",
+        "yes_price_dollars": "0.50",
+        "no_price_dollars": "0.50",
     }
     model = TradeModel.model_validate(data)
     assert model.trade_id == "t-002"
@@ -277,9 +277,9 @@ def test_models_ignore_extra_fields():
     tm = TradeModel.model_validate({
         "trade_id": "t",
         "ticker": "X",
-        "count": 1,
-        "yes_price": 50,
-        "no_price": 50,
+        "count_fp": "1.00",
+        "yes_price_dollars": "0.50",
+        "no_price_dollars": "0.50",
         "extra": "ignored",
     })
     assert not hasattr(tm, "extra")

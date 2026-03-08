@@ -91,8 +91,8 @@ class TestAsyncGetMarket:
                 "event_ticker": "KXTEST",
                 "title": "Test Market",
                 "status": "open",
-                "yes_bid": 45,
-                "yes_ask": 55,
+                "yes_bid_dollars": "0.45",
+                "yes_ask_dollars": "0.55",
             }
         })
 
@@ -101,7 +101,7 @@ class TestAsyncGetMarket:
         assert isinstance(market, AsyncMarket)
         assert market.ticker == "KXTEST-A"
         assert market.title == "Test Market"
-        assert market.yes_bid == 45
+        assert market.yes_bid_dollars == "0.45"
 
     @pytest.mark.asyncio
     async def test_get_markets(self, async_client):
@@ -145,20 +145,20 @@ class TestAsyncPortfolio:
     @pytest.mark.asyncio
     async def test_get_balance(self, async_client):
         async_client._session.request.return_value = _mock_response({
-            "balance": 5000,
-            "portfolio_value": 10000,
+            "balance_dollars": "50.00",
+            "portfolio_value_dollars": "100.00",
         })
 
         balance = await async_client.portfolio.get_balance()
 
-        assert balance.balance == 5000
-        assert balance.portfolio_value == 10000
+        assert balance.balance_dollars == "50.00"
+        assert balance.portfolio_value_dollars == "100.00"
 
     @pytest.mark.asyncio
     async def test_get_positions(self, async_client):
         async_client._session.request.return_value = _mock_response({
             "market_positions": [
-                {"ticker": "KXTEST-A", "position": 10},
+                {"ticker": "KXTEST-A", "position_fp": "10.00"},
             ],
             "cursor": "",
         })

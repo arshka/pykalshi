@@ -7,7 +7,6 @@ def main():
         print(f"Error initializing client: {e}")
         return
 
-    # Check if KXPRESNOMD-28 is an EVENT
     event_ticker = "KXPRESNOMD-28"
     print(f"Fetching event: {event_ticker}...")
     try:
@@ -17,7 +16,7 @@ def main():
         markets = event.get_markets()
         for m in markets:
             print(f" - {m.ticker}: {m.title}")
-            print(f"   Yes Bid: {m.yes_bid}, Yes Ask: {m.yes_ask}")
+            print(f"   Yes Bid: ${m.yes_bid_dollars}, Yes Ask: ${m.yes_ask_dollars}")
     except Exception as e:
         print(f"Failed to fetch event or markets for {event_ticker}: {e}")
 

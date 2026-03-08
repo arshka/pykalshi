@@ -6,6 +6,7 @@ Functions are only called when objects are displayed in Jupyter notebooks.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from html import escape
 from typing import TYPE_CHECKING
 
@@ -59,42 +60,28 @@ KALSHI_BASE_URL = "https://kalshi.com"
 
 
 # --- Link helpers ---
-# Kalshi URL structure:
-#   - Series page: /markets/{series_ticker}
-#   - Market page: /events/{event_ticker}?contract={market_ticker}
-# Note: Direct event URLs (/events/{event_ticker}) don't work without a slug,
-# so event links point to the series page instead.
 
 def _link(display: str, url: str) -> str:
-    """Render a clickable link."""
     return f'<a href="{url}" target="_blank" class="m" style="color:inherit;text-decoration:none;border-bottom:1px dashed #9ca3af">{escape(display)}</a>'
 
 
 def _plain(text: str) -> str:
-    """Render plain monospace text (non-clickable)."""
     return f'<span class="m">{escape(text)}</span>'
 
 
 def _market_url(market_ticker: str, event_ticker: str) -> str:
-    """Build URL for a specific market contract."""
     return f"{KALSHI_BASE_URL}/events/{event_ticker}?contract={market_ticker}"
 
 
 def _series_url(series_ticker: str) -> str:
-    """Build URL for a series page."""
     return f"{KALSHI_BASE_URL}/markets/{series_ticker}"
 
 
 def _derive_event_ticker(market_ticker: str) -> str | None:
-    """Derive event ticker from market ticker by removing the last segment.
-
-    e.g., KXNCAAMBTOTAL-26FEB04OKLAUK-136 -> KXNCAAMBTOTAL-26FEB04OKLAUK
-    """
     return market_ticker.rsplit("-", 1)[0] if "-" in market_ticker else None
 
 
 def _ticker_link(ticker: str, event_ticker: str | None = None) -> str:
-    """Render market ticker as link. Derives event_ticker if not provided."""
     event = event_ticker or _derive_event_ticker(ticker)
     if event:
         return _link(ticker, _market_url(ticker, event))
@@ -102,35 +89,30 @@ def _ticker_link(ticker: str, event_ticker: str | None = None) -> str:
 
 
 def _event_link(event_ticker: str, series_ticker: str | None = None) -> str:
-    """Render event ticker as link (points to series page)."""
     if series_ticker:
         return _link(event_ticker, _series_url(series_ticker))
     return _plain(event_ticker)
 
 
 def _series_link(series_ticker: str) -> str:
-    """Render series ticker as link."""
     return _link(series_ticker, _series_url(series_ticker))
 
 
-def _cents(v: int | None, as_dollars: bool = False) -> str:
-    """Format cents as currency. Use as_dollars=True for $X.XX format."""
+def _dollars(v: str | None) -> str:
+    """Format a dollar string for display."""
     if v is None:
         return "—"
-    if as_dollars:
-        return f"${v / 100:,.2f}"
-    return f"{v}¢"
+    return f"${v}"
 
 
-def _num(v: int | None) -> str:
-    """Format number with commas."""
+def _fp(v: str | None) -> str:
+    """Format a fixed-point count string for display."""
     if v is None:
         return "—"
-    return f"{v:,}"
+    return v
 
 
 def _status_pill(status: str | None) -> str:
-    """Render status as a colored pill."""
     if status is None:
         return "—"
     s = status.lower()
@@ -145,7 +127,6 @@ def _status_pill(status: str | None) -> str:
 
 
 def _side_pill(action: str | None, side: str | None) -> str:
-    """Render action/side as colored pills (always uppercase)."""
     parts = []
     if action:
         cls = "pill-green" if action.lower() == "buy" else "pill-red"
@@ -156,7 +137,6 @@ def _side_pill(action: str | None, side: str | None) -> str:
 
 
 def _result_pill(result: str | None) -> str:
-    """Render market result as uppercase pill."""
     if result is None:
         return "—"
     r = escape(result.upper())
@@ -164,62 +144,56 @@ def _result_pill(result: str | None) -> str:
     return f'<span class="pill {cls}">{r}</span>'
 
 
-def _pnl(v: int | None) -> str:
-    """Format P&L with color."""
+def _pnl_dollars(v: str | None) -> str:
+    """Format P&L dollar string with color."""
     if v is None:
         return "—"
-    cls = "g" if v >= 0 else "r"
-    sign = "+" if v > 0 else ""
-    return f'<span class="{cls}">{sign}${v / 100:,.2f}</span>'
+    d = Decimal(v)
+    cls = "g" if d >= 0 else "r"
+    sign = "+" if d > 0 else ""
+    return f'<span class="{cls}">{sign}${v}</span>'
 
 
 def _row(label: str, value: str, mono: bool = False) -> str:
-    """Generate a table row."""
     cls = ' class="m"' if mono else ""
     return f"<tr><th>{label}</th><td{cls}>{value}</td></tr>"
 
 
 def _mono_id(id: str, max_len: int = 16) -> str:
-    """Render an ID in monospace, truncated if needed."""
     safe_id = escape(id)
     if len(id) > max_len:
         return f'<span class="m">{escape(id[:max_len])}...</span>'
     return f'<span class="m">{safe_id}</span>'
 
 
-def _progress_bar(filled: int, total: int, color: str = "green") -> str:
-    """Render a progress bar on its own line."""
+def _progress_bar(filled: float, total: float, color: str = "green") -> str:
     if total == 0:
         return ""
-    pct = max(1, min(100, filled / total * 100))  # min 1% so bar is visible
+    pct = max(1, min(100, filled / total * 100))
     return f'<span class="bar-wrap"><span class="bar-bg"><span class="bar-fill bar-{color}" style="width:{pct:.0f}%"></span></span></span>'
 
 
-def _spread_viz(bid: int | None, ask: int | None) -> str:
-    """Render a visual bid/ask spread indicator (0-100 scale) on its own line."""
+def _spread_viz(bid: str | None, ask: str | None) -> str:
+    """Render a visual bid/ask spread indicator (0-1.00 dollar scale)."""
     if bid is None or ask is None:
         return ""
-    # bid and ask are in cents (0-100)
-    bid_pct = bid
-    ask_pct = 100 - ask  # ask from right side
-    return f'<span class="spread-wrap"><span class="spread-track"><span class="spread-bid" style="width:{bid_pct}%"></span><span class="spread-ask" style="width:{ask_pct}%"></span></span></span>'
+    bid_pct = float(Decimal(bid)) * 100
+    ask_pct = (1 - float(Decimal(ask))) * 100
+    return f'<span class="spread-wrap"><span class="spread-track"><span class="spread-bid" style="width:{bid_pct:.0f}%"></span><span class="spread-ask" style="width:{ask_pct:.0f}%"></span></span></span>'
 
 
-def _depth_bar(quantity: int, max_qty: int, cls: str = "depth-yes") -> str:
-    """Render a depth bar inline."""
+def _depth_bar(quantity: str, max_qty: Decimal, cls: str = "depth-yes") -> str:
     if max_qty == 0:
         return ""
-    pct = min(100, quantity / max_qty * 100)
-    width = max(3, int(pct * 0.4))  # scale to max 40px
+    pct = min(100, float(Decimal(quantity) / max_qty * 100))
+    width = max(3, int(pct * 0.4))
     return f'<span class="depth-bar {cls}" style="width:{width}px"></span>'
 
 
 def _format_time(ts: str | None) -> str:
-    """Format ISO timestamp to human-readable."""
     if not ts:
         return "—"
     try:
-        # Handle ISO format: 2024-01-15T14:30:00Z
         from datetime import datetime
         if "T" in ts:
             dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
@@ -230,26 +204,24 @@ def _format_time(ts: str | None) -> str:
 
 
 def _wrap(content: str) -> str:
-    """Wrap content with styles and container."""
     return f'{_STYLES}<div class="kl">{content}</div>'
 
 
 # --- Domain object renderers ---
 
 def market_html(m: Market) -> str:
-    """Render Market as HTML table."""
     status = m.status.value if m.status else None
     spread_viz = ""
-    if m.yes_bid is not None and m.yes_ask is not None:
-        spread_viz = _spread_viz(m.yes_bid, m.yes_ask)
+    if m.yes_bid_dollars is not None and m.yes_ask_dollars is not None:
+        spread_viz = _spread_viz(m.yes_bid_dollars, m.yes_ask_dollars)
 
     rows = [
         _row("Ticker", _ticker_link(m.ticker, m.event_ticker)),
         _row("Status", _status_pill(status)),
-        _row("YES", f"{_cents(m.yes_bid)} / {_cents(m.yes_ask)}{spread_viz}"),
-        _row("Last", _cents(m.last_price)),
-        _row("Volume", _num(m.volume)),
-        _row("Open Int", _num(m.open_interest)),
+        _row("YES", f"{_dollars(m.yes_bid_dollars)} / {_dollars(m.yes_ask_dollars)}{spread_viz}"),
+        _row("Last", _dollars(m.last_price_dollars)),
+        _row("Volume", _fp(m.volume_fp)),
+        _row("Open Int", _fp(m.open_interest_fp)),
     ]
 
     if m.title:
@@ -265,7 +237,6 @@ def market_html(m: Market) -> str:
 
 
 def series_html(s: Series) -> str:
-    """Render Series as HTML table."""
     category = f'<span class="pill pill-gray">{escape(s.category)}</span>' if s.category else "—"
 
     rows = [
@@ -274,7 +245,6 @@ def series_html(s: Series) -> str:
         _row("Category", category),
     ]
 
-    # Show tags if present
     tags = getattr(s, 'tags', None)
     if tags:
         tag_pills = " ".join(f'<span class="pill pill-gray">{escape(t)}</span>' for t in tags[:5])
@@ -284,27 +254,26 @@ def series_html(s: Series) -> str:
 
 
 def order_html(o: Order) -> str:
-    """Render Order as HTML table."""
     status = o.status.value if o.status else None
     action = o.action.value if o.action else None
     side = o.side.value if o.side else None
 
-    filled = o.fill_count or 0
-    total = o.initial_count or 0
-    fill_str = f"{filled}/{total}"
+    filled = Decimal(o.fill_count_fp or "0")
+    total = Decimal(o.initial_count_fp or "0")
+    fill_str = f"{o.fill_count_fp or '0'}/{o.initial_count_fp or '0'}"
     if total > 0:
-        pct = filled / total * 100
+        pct = float(filled / total * 100)
         fill_str += f" ({pct:.0f}%)"
         bar_color = "green" if pct == 100 else "yellow"
-        fill_str += _progress_bar(filled, total, bar_color)
+        fill_str += _progress_bar(float(filled), float(total), bar_color)
 
-    price = o.yes_price if o.yes_price is not None else o.no_price
+    price = o.yes_price_dollars if o.yes_price_dollars is not None else o.no_price_dollars
 
     rows = [
         _row("Order ID", _mono_id(o.order_id)),
         _row("Ticker", _ticker_link(o.ticker)),
         _row("Side", _side_pill(action, side)),
-        _row("Price", _cents(price)),
+        _row("Price", _dollars(price)),
         _row("Filled", fill_str),
         _row("Status", _status_pill(status)),
     ]
@@ -316,8 +285,6 @@ def order_html(o: Order) -> str:
 
 
 def event_html(e: Event) -> str:
-    """Render Event as HTML table."""
-    # Use checkmark/cross instead of Yes/No to avoid confusion with YES/NO sides
     exclusive = '<span class="g">✓</span>' if e.mutually_exclusive else '<span class="d">✗</span>'
     category = f'<span class="pill pill-gray">{escape(e.category)}</span>' if e.category else "—"
 
@@ -334,20 +301,19 @@ def event_html(e: Event) -> str:
 # --- Pydantic model renderers ---
 
 def balance_html(b: BalanceModel) -> str:
-    """Render BalanceModel as HTML table."""
     rows = [
-        _row("Balance", _cents(b.balance, as_dollars=True)),
-        _row("Portfolio", _cents(b.portfolio_value, as_dollars=True)),
+        _row("Balance", _dollars(b.balance_dollars)),
+        _row("Portfolio", _dollars(b.portfolio_value_dollars)),
     ]
     return _wrap(f"<table>{''.join(rows)}</table>")
 
 
 def position_html(p: PositionModel) -> str:
-    """Render PositionModel as HTML table."""
-    pos_str = f"{abs(p.position)}"
-    if p.position > 0:
+    pos_d = Decimal(p.position_fp)
+    pos_str = str(abs(pos_d))
+    if pos_d > 0:
         side_pill = '<span class="pill pill-green">YES</span>'
-    elif p.position < 0:
+    elif pos_d < 0:
         side_pill = '<span class="pill pill-red">NO</span>'
     else:
         side_pill = "—"
@@ -355,18 +321,16 @@ def position_html(p: PositionModel) -> str:
     rows = [
         _row("Ticker", _ticker_link(p.ticker)),
         _row("Position", f"{pos_str} {side_pill}"),
-        _row("Exposure", _cents(p.market_exposure, as_dollars=True)),
-        _row("Realized P&L", _pnl(p.realized_pnl)),
+        _row("Exposure", _dollars(p.market_exposure_dollars)),
+        _row("Realized P&L", _pnl_dollars(p.realized_pnl_dollars)),
     ]
     return _wrap(f"<table>{''.join(rows)}</table>")
 
 
 def fill_html(f: FillModel) -> str:
-    """Render FillModel as HTML table."""
     action = f.action.value if f.action else None
     side = f.side.value if f.side else None
 
-    # Use Taker/Maker instead of Yes/No to avoid confusion with YES/NO sides
     if f.is_taker is True:
         role = '<span class="pill pill-yellow">Taker</span>'
     elif f.is_taker is False:
@@ -378,15 +342,14 @@ def fill_html(f: FillModel) -> str:
         _row("Trade ID", _mono_id(f.trade_id)),
         _row("Ticker", _ticker_link(f.ticker)),
         _row("Side", _side_pill(action, side)),
-        _row("Count", _num(f.count)),
-        _row("Price", _cents(f.yes_price)),
+        _row("Count", _fp(f.count_fp)),
+        _row("Price", _dollars(f.yes_price_dollars)),
         _row("Role", role),
     ]
     return _wrap(f"<table>{''.join(rows)}</table>")
 
 
 def orderbook_html(ob: OrderbookResponse) -> str:
-    """Render OrderbookResponse as HTML."""
     spread = ob.spread
     mid = ob.mid
     imbalance = ob.imbalance
@@ -396,30 +359,30 @@ def orderbook_html(ob: OrderbookResponse) -> str:
         spread_viz = _spread_viz(ob.best_yes_bid, ob.best_yes_ask)
 
     rows = [
-        _row("Best Bid", _cents(ob.best_yes_bid)),
-        _row("Best Ask", _cents(ob.best_yes_ask)),
-        _row("Spread", f"{spread}¢{spread_viz}" if spread is not None else "—"),
-        _row("Mid", f"{mid:.1f}¢" if mid is not None else "—"),
+        _row("Best Bid", _dollars(ob.best_yes_bid)),
+        _row("Best Ask", _dollars(ob.best_yes_ask)),
+        _row("Spread", f"${spread}{spread_viz}" if spread is not None else "—"),
+        _row("Mid", f"${mid}" if mid is not None else "—"),
         _row("Imbalance", f"{imbalance:+.2f}" if imbalance is not None else "—"),
     ]
 
-    yes_levels = ob.yes_levels or []
-    no_levels = ob.no_levels or []
+    yes_levels = ob.orderbook.yes_dollars or []
+    no_levels = ob.orderbook.no_dollars or []
 
     depth_html = ""
     if yes_levels or no_levels:
-        max_yes = max((l.quantity for l in yes_levels), default=1)
-        max_no = max((l.quantity for l in no_levels), default=1)
+        max_yes = max((Decimal(q) for _, q in yes_levels), default=Decimal(1))
+        max_no = max((Decimal(q) for _, q in no_levels), default=Decimal(1))
         max_qty = max(max_yes, max_no)
 
         depth_rows = []
         for i in range(max(len(yes_levels), len(no_levels))):
             yes = yes_levels[i] if i < len(yes_levels) else None
             no = no_levels[i] if i < len(no_levels) else None
-            yes_text = f'{yes.price}¢ × {yes.quantity}' if yes else ""
-            yes_bar = _depth_bar(yes.quantity, max_qty, 'depth-yes') if yes else ""
-            no_text = f'{no.price}¢ × {no.quantity}' if no else ""
-            no_bar = _depth_bar(no.quantity, max_qty, 'depth-no') if no else ""
+            yes_text = f'${yes[0]} × {yes[1]}' if yes else ""
+            yes_bar = _depth_bar(yes[1], max_qty, 'depth-yes') if yes else ""
+            no_text = f'${no[0]} × {no[1]}' if no else ""
+            no_bar = _depth_bar(no[1], max_qty, 'depth-no') if no else ""
             depth_rows.append(
                 f'<tr>'
                 f'<td class="m" style="text-align:right;white-space:nowrap">{yes_text}</td>'
@@ -440,21 +403,19 @@ def orderbook_html(ob: OrderbookResponse) -> str:
 # --- Additional model renderers ---
 
 def settlement_html(s: SettlementModel) -> str:
-    """Render SettlementModel as HTML table."""
-    # Show position with formatted pills
     pos_parts = []
-    if s.yes_count > 0:
-        pos_parts.append(f'{s.yes_count} <span class="pill pill-green">YES</span>')
-    if s.no_count > 0:
-        pos_parts.append(f'{s.no_count} <span class="pill pill-red">NO</span>')
+    if Decimal(s.yes_count_fp) > 0:
+        pos_parts.append(f'{s.yes_count_fp} <span class="pill pill-green">YES</span>')
+    if Decimal(s.no_count_fp) > 0:
+        pos_parts.append(f'{s.no_count_fp} <span class="pill pill-red">NO</span>')
     position_str = " ".join(pos_parts) if pos_parts else "—"
 
     rows = [
         _row("Ticker", _ticker_link(s.ticker, s.event_ticker)),
         _row("Result", _result_pill(s.market_result)),
         _row("Position", position_str),
-        _row("Revenue", _cents(s.revenue, as_dollars=True)),
-        _row("P&L", _pnl(s.pnl)),
+        _row("Revenue", _dollars(s.revenue_dollars)),
+        _row("P&L", _pnl_dollars(s.pnl)),
     ]
 
     if s.settled_time:
@@ -464,7 +425,6 @@ def settlement_html(s: SettlementModel) -> str:
 
 
 def trade_html(t: TradeModel) -> str:
-    """Render TradeModel as HTML table."""
     taker = t.taker_side.upper() if t.taker_side else None
     taker_cls = "pill-green" if taker == "YES" else "pill-red" if taker == "NO" else "pill-gray"
     taker_str = f'<span class="pill {taker_cls}">{taker}</span>' if taker else "—"
@@ -473,8 +433,8 @@ def trade_html(t: TradeModel) -> str:
         _row("Trade ID", _mono_id(t.trade_id)),
         _row("Ticker", _ticker_link(t.ticker)),
         _row("Taker", taker_str),
-        _row("Count", _num(t.count)),
-        _row("Price", f"YES {_cents(t.yes_price)} / NO {_cents(t.no_price)}"),
+        _row("Count", _fp(t.count_fp)),
+        _row("Price", f"YES {_dollars(t.yes_price_dollars)} / NO {_dollars(t.no_price_dollars)}"),
     ]
 
     if t.created_time:
@@ -484,7 +444,6 @@ def trade_html(t: TradeModel) -> str:
 
 
 def exchange_status_html(e: ExchangeStatus) -> str:
-    """Render ExchangeStatus as HTML."""
     exchange_pill = _status_pill("active" if e.exchange_active else "closed")
     trading_pill = _status_pill("active" if e.trading_active else "closed")
 
@@ -496,13 +455,11 @@ def exchange_status_html(e: ExchangeStatus) -> str:
 
 
 def announcement_html(a: Announcement) -> str:
-    """Render Announcement as HTML."""
     rows = [
         _row("Title", f"<strong>{escape(a.title)}</strong>"),
     ]
 
     if a.body:
-        # Truncate long bodies
         body = a.body[:200] + "..." if len(a.body) > 200 else a.body
         rows.append(_row("Body", f'<span class="d">{escape(body)}</span>'))
 
@@ -516,23 +473,21 @@ def announcement_html(a: Announcement) -> str:
 
 
 def api_limits_html(a: APILimits) -> str:
-    """Render APILimits as HTML table."""
     rows = []
 
     if a.usage_tier:
         rows.append(_row("Tier", f'<span class="pill pill-gray">{escape(a.usage_tier)}</span>'))
 
     if a.read_limit is not None:
-        rows.append(_row("Read Limit", _num(a.read_limit)))
+        rows.append(_row("Read Limit", f"{a.read_limit:,}"))
 
     if a.write_limit is not None:
-        rows.append(_row("Write Limit", _num(a.write_limit)))
+        rows.append(_row("Write Limit", f"{a.write_limit:,}"))
 
     return _wrap(f"<table>{''.join(rows)}</table>") if rows else _wrap("<em>No limits info</em>")
 
 
 def api_key_html(k: APIKey) -> str:
-    """Render APIKey as HTML table."""
     rows = [
         _row("ID", _mono_id(k.id)),
     ]
@@ -554,7 +509,6 @@ def api_key_html(k: APIKey) -> str:
 
 
 def queue_position_html(q: QueuePositionModel) -> str:
-    """Render QueuePositionModel as HTML table."""
     pos_display = f"#{q.queue_position + 1}"
     pos_class = "g" if q.queue_position < 3 else "y" if q.queue_position < 10 else "d"
 
@@ -566,13 +520,12 @@ def queue_position_html(q: QueuePositionModel) -> str:
 
 
 def order_group_html(g: OrderGroupModel) -> str:
-    """Render OrderGroupModel as HTML table."""
     rows = [
         _row("Group ID", _mono_id(g.id)),
     ]
 
-    if g.contracts_limit is not None:
-        rows.append(_row("Contracts Limit", _num(g.contracts_limit)))
+    if g.contracts_limit_fp is not None:
+        rows.append(_row("Contracts Limit", _fp(g.contracts_limit_fp)))
 
     if g.orders:
         rows.append(_row("Orders", f'{len(g.orders)} linked'))
@@ -581,7 +534,6 @@ def order_group_html(g: OrderGroupModel) -> str:
 
 
 def mve_collection_html(c: MveCollection) -> str:
-    """Render MveCollection as HTML table."""
     rows = [
         _row("Collection", f'<span class="m">{escape(c.collection_ticker)}</span>'),
     ]
@@ -591,10 +543,8 @@ def mve_collection_html(c: MveCollection) -> str:
         rows.append(_row("Series", _series_link(c.series_ticker)))
     if c.data.associated_events:
         rows.append(_row("Events", f'{len(c.data.associated_events)} associated'))
-    if c.data.size_min is not None or c.data.size_max is not None:
-        lo = c.data.size_min or "?"
-        hi = c.data.size_max or "?"
+    if c.data.size_min_fp is not None or c.data.size_max_fp is not None:
+        lo = c.data.size_min_fp or "?"
+        hi = c.data.size_max_fp or "?"
         rows.append(_row("Legs", f'{lo}–{hi}'))
     return _wrap(f"<table>{''.join(rows)}</table>")
-
-

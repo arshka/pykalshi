@@ -38,13 +38,13 @@ class TickerMessage(BaseModel):
     """
 
     market_ticker: str
-    price: int | None = None
-    yes_bid: int | None = None
-    yes_ask: int | None = None
-    volume: int | None = None
-    open_interest: int | None = None
-    dollar_volume: int | None = None
-    dollar_open_interest: int | None = None
+    price_dollars: str | None = None
+    yes_bid_dollars: str | None = None
+    yes_ask_dollars: str | None = None
+    volume_fp: str | None = None
+    open_interest_fp: str | None = None
+    dollar_volume_dollars: str | None = None
+    dollar_open_interest_dollars: str | None = None
     ts: int | None = None
 
     model_config = ConfigDict(extra="ignore")
@@ -53,13 +53,13 @@ class TickerMessage(BaseModel):
 class OrderbookSnapshotMessage(BaseModel):
     """Full orderbook state received on initial subscription.
 
-    Contains all current price levels. After this, you'll receive
-    OrderbookDeltaMessage for incremental updates.
+    Contains all current price levels as dollar/fp strings.
+    After this, you'll receive OrderbookDeltaMessage for incremental updates.
     """
 
     market_ticker: str
-    yes: list[tuple[int, int]] | None = None  # [(price, quantity), ...]
-    no: list[tuple[int, int]] | None = None
+    yes_dollars: list[tuple[str, str]] | None = None  # [(price_dollars, quantity_fp), ...]
+    no_dollars: list[tuple[str, str]] | None = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -71,8 +71,8 @@ class OrderbookDeltaMessage(BaseModel):
     """
 
     market_ticker: str
-    price: int
-    delta: int  # Positive = added, negative = removed
+    price_dollars: str
+    delta_fp: str  # Positive = added, negative = removed
     side: str  # "yes" or "no"
 
     model_config = ConfigDict(extra="ignore")
@@ -87,9 +87,9 @@ class TradeMessage(BaseModel):
     market_ticker: str | None = None
     ticker: str | None = None
     trade_id: str | None = None
-    count: int | None = None
-    yes_price: int | None = None
-    no_price: int | None = None
+    count_fp: str | None = None
+    yes_price_dollars: str | None = None
+    no_price_dollars: str | None = None
     taker_side: str | None = None
     ts: int | None = None
 
@@ -107,9 +107,9 @@ class FillMessage(BaseModel):
     order_id: str | None = None
     side: str | None = None
     action: str | None = None
-    count: int | None = None
-    yes_price: int | None = None
-    no_price: int | None = None
+    count_fp: str | None = None
+    yes_price_dollars: str | None = None
+    no_price_dollars: str | None = None
     is_taker: bool | None = None
     ts: int | None = None
 
@@ -120,26 +120,22 @@ class PositionMessage(BaseModel):
     """Real-time position update (private channel).
 
     Sent when your position in a market changes (after fills settle).
-    Includes realized P&L and current exposure.
     """
 
     ticker: str
-    position: int | None = None  # Net contracts (positive = yes, negative = no)
-    market_exposure: int | None = None  # Current exposure in cents
-    realized_pnl: int | None = None  # Realized P&L in cents
-    total_traded: int | None = None  # Total contracts traded
-    resting_orders_count: int | None = None  # Open orders count
-    fees_paid: int | None = None  # Fees paid in cents
+    position_fp: str | None = None
+    market_exposure_dollars: str | None = None
+    realized_pnl_dollars: str | None = None
+    total_traded_fp: str | None = None
+    resting_orders_count: int | None = None
+    fees_paid_dollars: str | None = None
     ts: int | None = None
 
     model_config = ConfigDict(extra="ignore")
 
 
 class MarketLifecycleMessage(BaseModel):
-    """Market lifecycle state change (public channel).
-
-    Sent when a market's status changes (open, closed, settled, etc.).
-    """
+    """Market lifecycle state change (public channel)."""
 
     market_ticker: str
     status: str | None = None
@@ -150,10 +146,7 @@ class MarketLifecycleMessage(BaseModel):
 
 
 class OrderGroupUpdateMessage(BaseModel):
-    """Order group lifecycle update (private channel).
-
-    Sent when an order group's status changes (triggered, canceled, etc.).
-    """
+    """Order group lifecycle update (private channel)."""
 
     order_group_id: str
     status: str | None = None  # "active", "triggered", "canceled"
@@ -193,13 +186,10 @@ _TYPE_TO_CHANNEL: dict[str, str] = {
 def _parse_message(raw: str | bytes) -> tuple[str | None, str | None, Any, dict]:
     """Parse a raw WebSocket message into components.
 
-    Shared by Feed and AsyncFeed. Handles JSON parsing, type extraction,
-    channel resolution, and Pydantic model validation.
+    Shared by Feed and AsyncFeed.
 
     Returns:
         (msg_type, channel, parsed_payload, raw_data)
-        msg_type is None for unparseable messages.
-        channel falls back to msg_type for unknown types.
     """
     try:
         data = json.loads(raw)
@@ -228,15 +218,12 @@ def _parse_message(raw: str | bytes) -> tuple[str | None, str | None, Any, dict]
 class Feed:
     """Real-time streaming data feed via WebSocket.
 
-    Provides a clean interface to Kalshi's WebSocket API with automatic
-    reconnection, typed message models, and callback-based handling.
-
     Usage:
         feed = client.feed()
 
         @feed.on("ticker")
         def handle_ticker(msg: TickerMessage):
-            print(f"{msg.market_ticker}: {msg.yes_bid}/{msg.yes_ask}")
+            print(f"{msg.market_ticker}: ${msg.yes_bid_dollars}/${msg.yes_ask_dollars}")
 
         @feed.on("orderbook_delta")
         def handle_orderbook(msg: OrderbookMessage):
@@ -271,56 +258,32 @@ class Feed:
     """
 
     def __init__(self, client: KalshiClient) -> None:
-        """Initialize the feed.
-
-        Args:
-            client: Authenticated KalshiClient instance.
-        """
         self._client = client
         self._handlers: dict[str, list[Callable]] = {}
         self._active_subs: list[dict] = []
-        self._sids: dict[int, dict] = {}  # sid -> subscription params
-        self._pending_subs: dict[int, dict] = {}  # cmd id -> params (awaiting confirmation)
+        self._sids: dict[int, dict] = {}
+        self._pending_subs: dict[int, dict] = {}
         self._ws: Any = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._running = False
-        self._cmd_id_counter = itertools.count(1)  # Thread-safe counter
+        self._cmd_id_counter = itertools.count(1)
         self._connected = threading.Event()
         self._lock = threading.Lock()
         self._metrics_lock = threading.Lock()
 
-        # Latency and health tracking (protected by _metrics_lock)
         self._connected_at: float | None = None
         self._last_message_at: float | None = None
-        self._last_server_ts: int | None = None  # Server timestamp in ms
+        self._last_server_ts: int | None = None
         self._message_count: int = 0
         self._reconnect_count: int = 0
 
-        # Determine WS URL from client's API base
         self._ws_url = DEMO_WS_BASE if "demo" in client.api_base else DEFAULT_WS_BASE
 
     def on(
         self, channel: str, handler: Callable | None = None
     ) -> Callable:
-        """Register a handler for a channel.
-
-        Can be used as a decorator or called directly:
-
-            @feed.on("ticker")
-            def handle(msg: TickerMessage):
-                ...
-
-            # or
-            feed.on("ticker", my_handler)
-
-        Args:
-            channel: Channel name ("ticker", "orderbook_delta", "trade", "fill", "market_positions").
-            handler: Optional handler function. If None, returns a decorator.
-
-        Returns:
-            The handler function (for decorator chaining).
-        """
+        """Register a handler for a channel. Can be used as decorator or called directly."""
         if handler is not None:
             self._handlers.setdefault(channel, []).append(handler)
             return handler
@@ -338,19 +301,7 @@ class Feed:
         market_ticker: str | None = None,
         market_tickers: list[str] | None = None,
     ) -> None:
-        """Subscribe to a channel.
-
-        Args:
-            channel: Channel name ("ticker", "orderbook_delta", "trade", "fill", "market_positions").
-            market_ticker: Filter to a single market.
-            market_tickers: Filter to multiple markets.
-
-        Note:
-            - For "fill" and "market_positions" channels, market filters are ignored
-              (you get all your fills/positions).
-            - Can be called before or after start(). If called after, subscription
-              is sent immediately.
-        """
+        """Subscribe to a channel."""
         params: dict[str, Any] = {"channels": [channel]}
         if market_ticker is not None:
             params["market_ticker"] = market_ticker.upper()
@@ -360,14 +311,12 @@ class Feed:
         with self._lock:
             self._active_subs.append(params)
 
-        # Send immediately if connected
         if self._loop and self._connected.is_set():
             asyncio.run_coroutine_threadsafe(
                 self._subscribe_and_track(params), self._loop
             )
 
     async def _subscribe_and_track(self, params: dict) -> None:
-        """Send subscribe command and track the cmd id for sid mapping."""
         cmd_id = await self._send_cmd("subscribe", params)
         with self._lock:
             self._pending_subs[cmd_id] = params
@@ -379,13 +328,7 @@ class Feed:
         market_ticker: str | None = None,
         market_tickers: list[str] | None = None,
     ) -> None:
-        """Unsubscribe from a channel.
-
-        Args:
-            channel: Channel name.
-            market_ticker: Single market to unsubscribe from.
-            market_tickers: Multiple markets to unsubscribe from.
-        """
+        """Unsubscribe from a channel."""
         target: dict[str, Any] = {"channels": [channel]}
         if market_ticker is not None:
             target["market_ticker"] = market_ticker.upper()
@@ -394,13 +337,10 @@ class Feed:
 
         sids_to_remove: list[int] = []
         with self._lock:
-            # Find matching sids for connected unsubscribe
             for sid, params in list(self._sids.items()):
                 if params == target:
                     sids_to_remove.append(sid)
                     del self._sids[sid]
-
-            # Always remove from active subs (works offline too)
             self._active_subs = [s for s in self._active_subs if s != target]
 
         if sids_to_remove and self._loop and self._connected.is_set():
@@ -409,11 +349,7 @@ class Feed:
             )
 
     def start(self) -> None:
-        """Start the feed in a background thread.
-
-        Blocks briefly (up to 10s) until the initial connection is established.
-        If connection fails, the feed continues retrying in the background.
-        """
+        """Start the feed in a background thread."""
         with self._lock:
             if self._running:
                 return
@@ -432,7 +368,6 @@ class Feed:
                 return
             self._running = False
 
-        # Close the WebSocket connection gracefully
         if self._ws and self._loop and self._loop.is_running():
             async def close_ws():
                 try:
@@ -445,7 +380,6 @@ class Feed:
             except Exception:
                 pass
 
-        # Stop the event loop
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
 
@@ -457,17 +391,10 @@ class Feed:
 
     @property
     def is_connected(self) -> bool:
-        """Whether the WebSocket is currently connected."""
         return self._connected.is_set()
 
     @property
     def latency_ms(self) -> float | None:
-        """Estimated latency in milliseconds based on last message timestamp.
-
-        Returns None if no messages with timestamps have been received.
-        This measures the difference between the server's timestamp and
-        when we received the message locally. Assumes clocks are synchronized.
-        """
         with self._metrics_lock:
             if self._last_server_ts is None or self._last_message_at is None:
                 return None
@@ -476,13 +403,11 @@ class Feed:
 
     @property
     def messages_received(self) -> int:
-        """Total number of messages received since feed started."""
         with self._metrics_lock:
             return self._message_count
 
     @property
     def uptime_seconds(self) -> float | None:
-        """Seconds since connection was established. None if not connected."""
         with self._metrics_lock:
             if self._connected_at is None or not self.is_connected:
                 return None
@@ -490,7 +415,6 @@ class Feed:
 
     @property
     def seconds_since_last_message(self) -> float | None:
-        """Seconds since last message was received. None if no messages yet."""
         with self._metrics_lock:
             if self._last_message_at is None:
                 return None
@@ -498,12 +422,10 @@ class Feed:
 
     @property
     def reconnect_count(self) -> int:
-        """Number of times the feed has reconnected (0 on first connection)."""
         with self._metrics_lock:
             return self._reconnect_count
 
     def _run(self) -> None:
-        """Background thread entry point."""
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         try:
@@ -511,7 +433,6 @@ class Feed:
         except Exception as e:
             logger.error("Feed loop crashed: %s", e)
         finally:
-            # Cancel any pending tasks before closing
             pending = asyncio.all_tasks(self._loop)
             for task in pending:
                 task.cancel()
@@ -523,7 +444,6 @@ class Feed:
             self._loop = None
 
     async def _connect_loop(self) -> None:
-        """Main connection loop with auto-reconnect."""
         try:
             import websockets
         except ImportError:
@@ -544,15 +464,13 @@ class Feed:
                     ping_timeout=10,
                 ) as ws:
                     self._ws = ws
-                    backoff = 0.5  # Reset on successful connect
+                    backoff = 0.5
 
-                    # Track connection time
                     with self._metrics_lock:
                         if self._connected_at is not None:
                             self._reconnect_count += 1
                         self._connected_at = time.time()
 
-                    # Replay all active subscriptions (sids reset on reconnect)
                     with self._lock:
                         self._sids.clear()
                         self._pending_subs.clear()
@@ -585,7 +503,6 @@ class Feed:
         self._ws = None
 
     def _auth_headers(self) -> dict[str, str]:
-        """Generate authentication headers for WebSocket handshake."""
         timestamp, signature = self._client._sign_request("GET", _WS_SIGN_PATH)
         return {
             "KALSHI-ACCESS-KEY": self._client.api_key_id,
@@ -594,11 +511,9 @@ class Feed:
         }
 
     def _next_id(self) -> int:
-        """Get next command ID (thread-safe)."""
         return next(self._cmd_id_counter)
 
     async def _send_cmd(self, cmd: str, params: dict) -> int:
-        """Send a command over the WebSocket. Returns the command ID."""
         cmd_id = self._next_id()
         if self._ws:
             msg = json.dumps({"id": cmd_id, "cmd": cmd, "params": params})
@@ -607,7 +522,6 @@ class Feed:
         return cmd_id
 
     def _dispatch(self, raw: str | bytes) -> None:
-        """Parse incoming message and dispatch to handlers."""
         receive_time = time.time()
         with self._metrics_lock:
             self._last_message_at = receive_time
@@ -619,7 +533,6 @@ class Feed:
                 logger.warning("Malformed message: %.200s", raw)
             return
 
-        # Track subscription IDs from server confirmations
         if msg_type == "subscribed":
             inner = data.get("msg", {})
             sid = inner.get("sid") if isinstance(inner, dict) else None
@@ -630,7 +543,6 @@ class Feed:
                         self._sids[sid] = params
             return
 
-        # Extract server timestamp if present (in milliseconds)
         payload = data.get("msg", data)
         if isinstance(payload, dict):
             ts = payload.get("ts")

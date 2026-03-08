@@ -28,10 +28,6 @@ class DataFrameList(list, Generic[T]):
 
     Behaves exactly like a normal list, but adds a .to_dataframe() method
     for convenient conversion to pandas DataFrames.
-
-    Example:
-        positions = client.portfolio.get_positions()  # Returns DataFrameList
-        df = positions.to_dataframe()
     """
 
     @overload
@@ -76,54 +72,31 @@ def to_dataframe(obj: Any) -> pd.DataFrame:
         - Lists of domain objects (Market, Order, Event, Series)
         - CandlestickResponse (extracts candlesticks with flattened price data)
         - Single Pydantic models (returns single-row DataFrame)
-
-    Args:
-        obj: A pykalshi object or list of objects.
-
-    Returns:
-        A pandas DataFrame with appropriate columns.
-
-    Examples:
-        >>> positions = client.portfolio.get_positions()
-        >>> df = to_dataframe(positions)
-
-        >>> markets = client.get_markets(limit=100)
-        >>> df = to_dataframe(markets)
-
-        >>> candles = market.get_candlesticks(start_ts, end_ts)
-        >>> df = to_dataframe(candles)
     """
     pd = _import_pandas()
 
-    # Import here to avoid circular imports
     from .models import CandlestickResponse, OrderbookResponse
 
-    # Handle CandlestickResponse specially - flatten nested price data
     if isinstance(obj, CandlestickResponse):
         return _candlesticks_to_df(obj, pd)
 
-    # Handle OrderbookResponse - convert to price level rows
     if isinstance(obj, OrderbookResponse):
         return _orderbook_to_df(obj, pd)
 
-    # Handle sequences
     if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
         if len(obj) == 0:
             return pd.DataFrame()
         return _sequence_to_df(obj, pd)
 
-    # Handle single objects
     return _single_to_df(obj, pd)
 
 
 def _single_to_df(obj: Any, pd) -> pd.DataFrame:
-    """Convert a single object to a single-row DataFrame."""
     data = _extract_data(obj)
     return pd.DataFrame([data])
 
 
 def _sequence_to_df(items: Sequence, pd) -> pd.DataFrame:
-    """Convert a sequence of objects to a DataFrame."""
     records = [_extract_data(item) for item in items]
     return pd.DataFrame(records)
 
@@ -131,26 +104,17 @@ def _sequence_to_df(items: Sequence, pd) -> pd.DataFrame:
 def _extract_data(obj: Any) -> dict:
     """Extract a flat dict from an object.
 
-    Handles:
-        - Domain objects with .data attribute (Market, Order, Event, Series)
-        - Pydantic models with .model_dump()
-        - Plain dicts
-
     Uses mode='json' to serialize enums as their string values.
     """
-    # Domain objects wrap a Pydantic model in .data
     if hasattr(obj, 'data') and hasattr(obj.data, 'model_dump'):
         return obj.data.model_dump(mode='json')
 
-    # Pydantic models
     if hasattr(obj, 'model_dump'):
         return obj.model_dump(mode='json')
 
-    # Already a dict
     if isinstance(obj, dict):
         return obj
 
-    # Fallback: try __dict__
     if hasattr(obj, '__dict__'):
         return {k: v for k, v in obj.__dict__.items() if not k.startswith('_')}
 
@@ -164,13 +128,12 @@ def _candlesticks_to_df(response: Any, pd) -> pd.DataFrame:
         record = {
             'ticker': response.ticker,
             'end_period_ts': candle.end_period_ts,
-            'volume': candle.volume,
-            'open_interest': candle.open_interest,
+            'volume_fp': candle.volume_fp,
+            'open_interest_fp': candle.open_interest_fp,
         }
 
-        # Flatten price data
         if candle.price:
-            for field in ('open', 'high', 'low', 'close', 'mean'):
+            for field in ('open_dollars', 'high_dollars', 'low_dollars', 'close_dollars', 'mean_dollars'):
                 value = getattr(candle.price, field, None)
                 if value is not None:
                     record[field] = value
@@ -179,7 +142,6 @@ def _candlesticks_to_df(response: Any, pd) -> pd.DataFrame:
 
     df = pd.DataFrame(records)
 
-    # Convert timestamp to datetime if pandas available
     if 'end_period_ts' in df.columns and len(df) > 0:
         df['timestamp'] = pd.to_datetime(df['end_period_ts'], unit='s')
 
@@ -189,26 +151,27 @@ def _candlesticks_to_df(response: Any, pd) -> pd.DataFrame:
 def _orderbook_to_df(response: Any, pd) -> pd.DataFrame:
     """Convert OrderbookResponse to DataFrame with price levels.
 
-    Returns DataFrame with columns: side, price, quantity
+    Returns DataFrame with columns: side, price_dollars, quantity_fp
     Sorted by price descending within each side.
     """
+    from decimal import Decimal
     records = []
 
-    if response.orderbook.yes:
-        for price, quantity in response.orderbook.yes:
-            records.append({'side': 'yes', 'price': price, 'quantity': quantity})
+    if response.orderbook.yes_dollars:
+        for price, quantity in response.orderbook.yes_dollars:
+            records.append({'side': 'yes', 'price_dollars': price, 'quantity_fp': quantity})
 
-    if response.orderbook.no:
-        for price, quantity in response.orderbook.no:
-            records.append({'side': 'no', 'price': price, 'quantity': quantity})
+    if response.orderbook.no_dollars:
+        for price, quantity in response.orderbook.no_dollars:
+            records.append({'side': 'no', 'price_dollars': price, 'quantity_fp': quantity})
 
     df = pd.DataFrame(records)
 
     if len(df) > 0:
-        # Sort: yes side first, then by price descending
+        df['_sort_price'] = df['price_dollars'].apply(lambda x: float(Decimal(x)))
         df = df.sort_values(
-            ['side', 'price'],
+            ['side', '_sort_price'],
             ascending=[False, False]
-        ).reset_index(drop=True)
+        ).drop(columns=['_sort_price']).reset_index(drop=True)
 
     return df

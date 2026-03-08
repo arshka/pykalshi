@@ -171,12 +171,14 @@ def list_markets(limit: int = 100, status: str = "open", ticker: Optional[str] =
 
     # 2. Filter for Active Markets
     # We only keep volume/OI check to avoid truly dead/empty slots
+    from decimal import Decimal
     filtered_markets = []
     for m in market_data:
         # Skip if Volume and OI are both 0/None
-        has_vol = (m.volume and m.volume > 0) or (m.volume_24h and m.volume_24h > 0)
-        has_oi = (m.open_interest and m.open_interest > 0)
-        if not (has_vol or has_oi):
+        vol = Decimal(m.volume_fp or "0")
+        vol24 = Decimal(m.volume_24h_fp or "0")
+        oi = Decimal(m.open_interest_fp or "0")
+        if not (vol > 0 or vol24 > 0 or oi > 0):
            continue
 
         filtered_markets.append(m)
@@ -185,7 +187,7 @@ def list_markets(limit: int = 100, status: str = "open", ticker: Optional[str] =
 
     # 3. Sort by Volume (Descending)
     # Prioritize 24h volume for "Hot" markets, then total volume
-    market_data.sort(key=lambda m: (m.volume_24h or 0, m.volume or 0), reverse=True)
+    market_data.sort(key=lambda m: (Decimal(m.volume_24h_fp or "0"), Decimal(m.volume_fp or "0")), reverse=True)
 
     # 4. Filter by Ticker if requested
     if ticker:
@@ -241,52 +243,55 @@ def get_portfolio_summary():
     balance = c.portfolio.get_balance()
     positions = c.portfolio.get_positions(count_filter=PositionCountFilter.POSITION, fetch_all=True)
 
+    from decimal import Decimal
+
     # Calculate total position exposure
-    total_exposure = sum(abs(p.market_exposure or 0) for p in positions)
+    total_exposure = sum(abs(Decimal(p.market_exposure_dollars or "0")) for p in positions)
 
     # Calculate unrealized P&L by fetching current market prices
-    unrealized_pnl = 0
-    position_market_value = 0
+    unrealized_pnl = Decimal("0")
+    position_market_value = Decimal("0")
     for pos in positions:
-        if pos.position == 0:
+        pos_qty = Decimal(pos.position_fp)
+        if pos_qty == 0:
             continue
         try:
             market = c.get_market(pos.ticker)
             market_data = market.data
 
             # Get mid price (or last price as fallback)
-            yes_bid = market_data.yes_bid or 0
-            yes_ask = market_data.yes_ask or 0
+            yes_bid = Decimal(market_data.yes_bid_dollars or "0")
+            yes_ask = Decimal(market_data.yes_ask_dollars or "0")
             if yes_bid and yes_ask:
                 mid_price = (yes_bid + yes_ask) / 2
             else:
-                mid_price = market_data.last_price or 50
+                mid_price = Decimal(market_data.last_price_dollars or "0.50")
 
             # Calculate position value at current price
-            if pos.position > 0:
+            if pos_qty > 0:
                 # Long YES: value = contracts * yes_price
-                current_value = pos.position * mid_price
+                current_value = pos_qty * mid_price
             else:
-                # Long NO (negative position): value = contracts * (100 - yes_price)
-                current_value = abs(pos.position) * (100 - mid_price)
+                # Long NO (negative position): value = contracts * (1.00 - yes_price)
+                current_value = abs(pos_qty) * (Decimal("1") - mid_price)
 
             position_market_value += current_value
 
             # Unrealized = current_value - cost_basis
-            # market_exposure is typically what you paid (cost basis)
-            cost_basis = abs(pos.market_exposure or 0)
+            # market_exposure_dollars is typically what you paid (cost basis)
+            cost_basis = abs(Decimal(pos.market_exposure_dollars or "0"))
             unrealized_pnl += current_value - cost_basis
         except Exception:
             # If we can't fetch market data, skip this position
             pass
 
     return {
-        "balance": balance.balance,
-        "portfolio_value": balance.portfolio_value,
+        "balance_dollars": balance.balance_dollars,
+        "portfolio_value_dollars": balance.portfolio_value_dollars,
         "position_count": len(positions),
-        "total_exposure": total_exposure,
-        "position_market_value": int(position_market_value),
-        "unrealized_pnl": int(unrealized_pnl),
+        "total_exposure_dollars": str(total_exposure),
+        "position_market_value_dollars": str(position_market_value),
+        "unrealized_pnl_dollars": str(unrealized_pnl),
     }
 
 
@@ -322,10 +327,11 @@ def get_portfolio_history(days: int = 30, resolution: Optional[str] = None):
         if not ts or ts < min_ts:
             continue
 
-        # Settlement P&L = revenue - costs - fees
-        fee_cents = int(float(settlement.fee_cost or 0) * 100)
-        delta = settlement.revenue - settlement.yes_total_cost - settlement.no_total_cost - fee_cents
-        events.append({'ts': ts, 'delta': delta, 'type': 'settlement'})
+        # Settlement P&L = revenue - costs - fees (all dollar strings)
+        from decimal import Decimal as D
+        fee = D(settlement.fee_cost_dollars or "0")
+        delta = D(settlement.revenue_dollars) - D(settlement.yes_total_cost_dollars) - D(settlement.no_total_cost_dollars) - fee
+        events.append({'ts': ts, 'delta': str(delta), 'type': 'settlement'})
 
     if not events:
         return []
@@ -334,10 +340,11 @@ def get_portfolio_history(days: int = 30, resolution: Optional[str] = None):
     events.sort(key=lambda e: e['ts'])
 
     # Calculate cumulative P&L
-    cumulative = 0
+    from decimal import Decimal as D
+    cumulative = D("0")
     for e in events:
-        cumulative += e['delta']
-        e['pnl'] = cumulative
+        cumulative += D(e['delta'])
+        e['pnl'] = str(cumulative)
 
     # Resample if requested
     if resolution and len(events) > 1:
@@ -462,14 +469,14 @@ def get_market_history(ticker: str, period: str = "hour", limit: int = 168):
     for candle in history.candlesticks:
         price = None
         if candle.price:
-            price = candle.price.mean if candle.price.mean is not None else candle.price.close
+            price = candle.price.mean_dollars if candle.price.mean_dollars is not None else candle.price.close_dollars
         if price is not None:
             data.append({
                 "ts": candle.end_period_ts,
                 "price": price,
-                "yes_ask": candle.yes_ask.close if candle.yes_ask else None,
-                "yes_bid": candle.yes_bid.close if candle.yes_bid else None,
-                "volume": candle.volume
+                "yes_ask_dollars": candle.yes_ask.close_dollars if candle.yes_ask else None,
+                "yes_bid_dollars": candle.yes_bid.close_dollars if candle.yes_bid else None,
+                "volume_fp": candle.volume_fp,
             })
 
     return data

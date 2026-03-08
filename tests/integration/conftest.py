@@ -18,6 +18,7 @@ Skip with: pytest tests/ --ignore=tests/integration/
 
 import os
 import pytest
+from decimal import Decimal
 from pathlib import Path
 
 
@@ -135,13 +136,13 @@ def active_market(client):
         pytest.skip("No open markets available")
 
     # Prefer markets with volume (more likely to have activity)
-    markets_with_volume = [m for m in markets if m.volume_24h]
+    markets_with_volume = [m for m in markets if m.volume_24h_fp]
     if markets_with_volume:
-        return max(markets_with_volume, key=lambda m: m.volume_24h or 0)
+        return max(markets_with_volume, key=lambda m: Decimal(m.volume_24h_fp or "0"))
 
     # Fall back to any market with bid/ask
     for m in markets:
-        if m.yes_bid or m.yes_ask:
+        if m.yes_bid_dollars or m.yes_ask_dollars:
             return m
 
     return markets[0]

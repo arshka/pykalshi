@@ -43,7 +43,7 @@ class Communications:
         self,
         market_ticker: str,
         *,
-        contracts: int | None = None,
+        contracts_fp: str | None = None,
         target_cost_dollars: str | None = None,
         rest_remainder: bool = False,
     ) -> RfqModel:
@@ -51,17 +51,17 @@ class Communications:
 
         Args:
             market_ticker: The combo market ticker to request quotes for.
-            contracts: Number of contracts to trade.
-            target_cost_dollars: Target cost in dollars (FixedPoint string, e.g. "10.00").
-                                 Use this OR contracts, not both.
+            contracts_fp: Number of contracts to trade (fixed-point string, e.g. "10.00").
+            target_cost_dollars: Target cost in dollars (e.g. "10.00").
+                                 Use this OR contracts_fp, not both.
             rest_remainder: If True, rest any unfilled portion on the orderbook.
         """
         body: dict = {
             "market_ticker": market_ticker.upper(),
             "rest_remainder": rest_remainder,
         }
-        if contracts is not None:
-            body["contracts"] = contracts
+        if contracts_fp is not None:
+            body["contracts_fp"] = contracts_fp
         if target_cost_dollars is not None:
             body["target_cost_dollars"] = target_cost_dollars
 
@@ -181,14 +181,14 @@ class Communications:
 class AsyncCommunications(Communications):
     """Async variant of Communications."""
 
-    async def create_rfq(self, market_ticker, *, contracts=None,  # type: ignore[override]
+    async def create_rfq(self, market_ticker, *, contracts_fp=None,  # type: ignore[override]
                          target_cost_dollars=None, rest_remainder=False) -> RfqModel:
         body: dict = {
             "market_ticker": market_ticker.upper(),
             "rest_remainder": rest_remainder,
         }
-        if contracts is not None:
-            body["contracts"] = contracts
+        if contracts_fp is not None:
+            body["contracts_fp"] = contracts_fp
         if target_cost_dollars is not None:
             body["target_cost_dollars"] = target_cost_dollars
         response = await self._client.post("/communications/rfqs", body)

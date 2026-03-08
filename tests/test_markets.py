@@ -18,9 +18,9 @@ class TestGetMarket:
                 "event_ticker": "KXTEST",
                 "title": "Test Market",
                 "status": "open",
-                "yes_bid": 45,
-                "yes_ask": 55,
-                "volume": 1000,
+                "yes_bid_dollars": "0.45",
+                "yes_ask_dollars": "0.55",
+                "volume_fp": "1000.00",
             }
         })
 
@@ -29,8 +29,8 @@ class TestGetMarket:
         assert isinstance(market, Market)
         assert market.ticker == "KXTEST-A"
         assert market.title == "Test Market"
-        assert market.yes_bid == 45
-        assert market.yes_ask == 55
+        assert market.yes_bid_dollars == "0.45"
+        assert market.yes_ask_dollars == "0.55"
 
     def test_get_market_not_found(self, client, mock_response):
         """Test fetching non-existent market raises error."""
@@ -120,15 +120,15 @@ class TestMarketCandlesticks:
                 "candlesticks": [
                     {
                         "end_period_ts": 1704067200,
-                        "volume": 100,
-                        "open_interest": 500,
-                        "price": {"open": 50, "high": 55, "low": 48, "close": 53},
+                        "volume_fp": "100.00",
+                        "open_interest_fp": "500.00",
+                        "price": {"open_dollars": "0.50", "high_dollars": "0.55", "low_dollars": "0.48", "close_dollars": "0.53"},
                     },
                     {
                         "end_period_ts": 1704070800,
-                        "volume": 150,
-                        "open_interest": 520,
-                        "price": {"open": 53, "high": 58, "low": 52, "close": 56},
+                        "volume_fp": "150.00",
+                        "open_interest_fp": "520.00",
+                        "price": {"open_dollars": "0.53", "high_dollars": "0.58", "low_dollars": "0.52", "close_dollars": "0.56"},
                     },
                 ],
             }),
@@ -143,8 +143,8 @@ class TestMarketCandlesticks:
 
         assert candles.ticker == "INXD-24JAN01"
         assert len(candles.candlesticks) == 2
-        assert candles.candlesticks[0].volume == 100
-        assert candles.candlesticks[0].price.open == 50
+        assert candles.candlesticks[0].volume_fp == "100.00"
+        assert candles.candlesticks[0].price.open_dollars == "0.50"
 
     def test_get_candlesticks_no_series_ticker_error(self, client, mock_response):
         """Test candlesticks raises error when series_ticker missing."""
@@ -249,17 +249,17 @@ class TestMarketTrades:
                     {
                         "trade_id": "t-001",
                         "ticker": "KXTEST-A",
-                        "count": 10,
-                        "yes_price": 55,
-                        "no_price": 45,
+                        "count_fp": "10.00",
+                        "yes_price_dollars": "0.55",
+                        "no_price_dollars": "0.45",
                         "taker_side": "yes",
                     },
                     {
                         "trade_id": "t-002",
                         "ticker": "KXTEST-A",
-                        "count": 5,
-                        "yes_price": 56,
-                        "no_price": 44,
+                        "count_fp": "5.00",
+                        "yes_price_dollars": "0.56",
+                        "no_price_dollars": "0.44",
                     },
                 ],
                 "cursor": "",
@@ -371,14 +371,14 @@ class TestMarketObject:
             "market": {
                 "ticker": "TEST",
                 "rules_primary": "Test rules here",
-                "tick_size": 1,
+                "tick_size_dollars": "0.01",
             }
         })
 
         market = client.get_market("TEST")
 
         assert market.rules_primary == "Test rules here"
-        assert market.tick_size == 1
+        assert market.tick_size_dollars == "0.01"
 
 
 class TestGetEvent:
