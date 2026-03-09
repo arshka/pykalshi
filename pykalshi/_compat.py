@@ -33,12 +33,12 @@ def fp_to_int(val: str | None) -> int | None:
 
 def cents_to_dollars(val: int) -> str:
     """Cents int → dollar string. 45 → '0.45'."""
-    return str(Decimal(val) / 100)
+    return str((Decimal(val) / 100).quantize(Decimal("0.01")))
 
 
 def int_to_fp(val: int) -> str:
-    """Int → fixed-point string. 5 → '5'."""
-    return str(int(val))
+    """Int → fixed-point string. 5 → '5.00'."""
+    return str(Decimal(int(val)).quantize(Decimal("0.01")))
 
 
 def orderbook_to_legacy(levels: list[tuple[str, str]] | None) -> list[tuple[int, int]] | None:

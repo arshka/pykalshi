@@ -392,13 +392,10 @@ class OrderbookResponse(BaseModel):
     def spread_bps(self) -> float | None:
         """Spread as basis points of mid. None if no two-sided market."""
         if self.spread is None or self.mid is None:
-            mid_d = Decimal(self.mid)
-            if mid_d == 0:
-                return None
-        else:
-            mid_d = Decimal(self.mid)
-            if mid_d == 0:
-                return None
+            return None
+        mid_d = Decimal(self.mid)
+        if mid_d == 0:
+            return None
         return float(Decimal(self.spread) / mid_d * 10000)
 
     def yes_depth(self, through_price: str) -> str:

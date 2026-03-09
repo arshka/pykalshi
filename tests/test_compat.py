@@ -42,11 +42,14 @@ class TestConversionFunctions:
 
     def test_cents_to_dollars(self):
         assert cents_to_dollars(45) == "0.45"
-        assert cents_to_dollars(100) == "1"
+        assert cents_to_dollars(100) == "1.00"
+        assert cents_to_dollars(50) == "0.50"
+        assert cents_to_dollars(0) == "0.00"
 
     def test_int_to_fp(self):
-        assert int_to_fp(5) == "5"
-        assert int_to_fp(100) == "100"
+        assert int_to_fp(5) == "5.00"
+        assert int_to_fp(100) == "100.00"
+        assert int_to_fp(0) == "0.00"
 
     def test_orderbook_to_legacy(self):
         levels = [("0.45", "10.00"), ("0.50", "20.50")]
@@ -234,7 +237,7 @@ class TestConvertLegacyKwargs:
     def test_basic_conversion(self):
         kw = {"yes_price": 45, "count": 5}
         convert_legacy_kwargs(kw, PLACE_ORDER_LEGACY)
-        assert kw == {"yes_price_dollars": "0.45", "count_fp": "5"}
+        assert kw == {"yes_price_dollars": "0.45", "count_fp": "5.00"}
 
     def test_new_param_takes_precedence(self):
         kw = {"yes_price": 45, "yes_price_dollars": "0.50"}
@@ -268,7 +271,7 @@ class TestPlaceOrderLegacyParams:
         # Verify correct payload sent
         call_args = client._session.request.call_args
         body = json.loads(call_args.kwargs["content"])
-        assert body["count_fp"] == "5"
+        assert body["count_fp"] == "5.00"
         assert body["yes_price_dollars"] == "0.45"
 
         # Verify deprecation warnings fired
@@ -291,7 +294,7 @@ class TestPlaceOrderLegacyParams:
 
         call_args = client._session.request.call_args
         body = json.loads(call_args.kwargs["content"])
-        assert body["count_fp"] == "5"
+        assert body["count_fp"] == "5.00"
         # no_price=45 → no_price_dollars="0.45" → converted to yes_price_dollars internally
         assert "yes_price_dollars" in body
 
@@ -313,8 +316,8 @@ class TestAmendOrderLegacyParams:
 
         call_args = client._session.request.call_args
         body = json.loads(call_args.kwargs["content"])
-        assert body["count_fp"] == "10"
-        assert body["yes_price_dollars"] == "0.5"
+        assert body["count_fp"] == "10.00"
+        assert body["yes_price_dollars"] == "0.50"
 
 
 class TestDecreaseOrderLegacyParams:
@@ -329,7 +332,7 @@ class TestDecreaseOrderLegacyParams:
 
         call_args = client._session.request.call_args
         body = json.loads(call_args.kwargs["content"])
-        assert body["reduce_by_fp"] == "3"
+        assert body["reduce_by_fp"] == "3.00"
 
 
 class TestBatchOrdersLegacyParams:
@@ -342,7 +345,7 @@ class TestBatchOrdersLegacyParams:
             warnings.simplefilter("always")
             prepared = Portfolio._build_batch_orders(orders)
 
-        assert prepared[0]["count_fp"] == "5"
+        assert prepared[0]["count_fp"] == "5.00"
         assert prepared[0]["yes_price_dollars"] == "0.45"
         assert "count" not in prepared[0]
         assert "yes_price" not in prepared[0]
@@ -360,7 +363,7 @@ class TestOrderGroupLegacyParams:
 
         call_args = client._session.request.call_args
         body = json.loads(call_args.kwargs["content"])
-        assert body["contracts_limit_fp"] == "100"
+        assert body["contracts_limit_fp"] == "100.00"
 
 
 class TestTransferLegacyParams:
@@ -378,4 +381,4 @@ class TestTransferLegacyParams:
 
         call_args = client._session.request.call_args
         body = json.loads(call_args.kwargs["content"])
-        assert body["amount_dollars"] == "5"
+        assert body["amount_dollars"] == "5.00"
