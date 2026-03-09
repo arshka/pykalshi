@@ -1,8 +1,11 @@
 """Tests for portfolio functionality: positions, fills, and order retrieval."""
 
+from decimal import Decimal
+
 import pytest
 from unittest.mock import ANY
 from pykalshi.enums import Action, Side, OrderStatus, PositionCountFilter
+from pykalshi.portfolio import Portfolio
 
 
 def test_get_positions_workflow(client, mock_response):
@@ -442,3 +445,92 @@ def test_order_wait_until_terminal_timeout(client, mock_response, mocker):
 
     assert "order-abc-123" in str(exc_info.value)
     assert "resting" in str(exc_info.value)
+
+
+# --- Tick size validation ---
+
+class TestValidateTickSize:
+    """Tests for Portfolio._validate_tick_size."""
+
+    _validate = staticmethod(Portfolio._validate_tick_size)
+
+    # linear_cent: tick $0.01
+
+    def test_linear_cent_valid(self):
+        self._validate(Decimal("0.50"), "linear_cent")
+        self._validate(Decimal("0.01"), "linear_cent")
+        self._validate(Decimal("1.00"), "linear_cent")
+
+    def test_linear_cent_invalid(self):
+        with pytest.raises(ValueError, match="linear_cent"):
+            self._validate(Decimal("0.505"), "linear_cent")
+
+    # deci_cent: tick $0.001
+
+    def test_deci_cent_valid(self):
+        self._validate(Decimal("0.501"), "deci_cent")
+        self._validate(Decimal("0.001"), "deci_cent")
+        self._validate(Decimal("0.01"), "deci_cent")
+
+    def test_deci_cent_invalid(self):
+        with pytest.raises(ValueError, match="deci_cent"):
+            self._validate(Decimal("0.5005"), "deci_cent")
+
+    # tapered_deci_cent: $0.001 at edges, $0.01 in middle
+
+    def test_tapered_edges_valid(self):
+        """Prices at or below $0.10 and at or above $0.90 use $0.001 tick."""
+        self._validate(Decimal("0.051"), "tapered_deci_cent")
+        self._validate(Decimal("0.100"), "tapered_deci_cent")
+        self._validate(Decimal("0.901"), "tapered_deci_cent")
+        self._validate(Decimal("0.999"), "tapered_deci_cent")
+
+    def test_tapered_middle_valid(self):
+        """Prices between $0.10 and $0.90 use $0.01 tick."""
+        self._validate(Decimal("0.50"), "tapered_deci_cent")
+        self._validate(Decimal("0.11"), "tapered_deci_cent")
+        self._validate(Decimal("0.89"), "tapered_deci_cent")
+
+    def test_tapered_middle_invalid(self):
+        """$0.001 granularity rejected in the $0.10-$0.90 middle range."""
+        with pytest.raises(ValueError, match="tapered_deci_cent"):
+            self._validate(Decimal("0.501"), "tapered_deci_cent")
+
+    def test_tapered_boundary_at_010(self):
+        """$0.10 exactly is in the edge zone (tick $0.001)."""
+        self._validate(Decimal("0.100"), "tapered_deci_cent")
+        self._validate(Decimal("0.099"), "tapered_deci_cent")
+
+    def test_tapered_just_above_010_invalid(self):
+        """$0.101 is in the middle zone (tick $0.01), so $0.001 granularity fails."""
+        with pytest.raises(ValueError, match="tapered_deci_cent"):
+            self._validate(Decimal("0.101"), "tapered_deci_cent")
+
+    def test_tapered_boundary_at_090(self):
+        """$0.90 is in the edge zone (tick $0.001)."""
+        self._validate(Decimal("0.900"), "tapered_deci_cent")
+
+    def test_tapered_boundary_just_below_090(self):
+        """$0.899 is in the middle zone -> tick $0.01 -> 0.899 invalid."""
+        with pytest.raises(ValueError, match="tapered_deci_cent"):
+            self._validate(Decimal("0.899"), "tapered_deci_cent")
+
+
+# --- Fractional validation ---
+
+class TestValidateFractional:
+    """Tests for Portfolio._validate_fractional."""
+
+    _validate = staticmethod(Portfolio._validate_fractional)
+
+    def test_whole_count_fractional_disabled(self):
+        self._validate("10", fractional_enabled=False)
+        self._validate("1", fractional_enabled=False)
+
+    def test_fractional_count_fractional_disabled(self):
+        with pytest.raises(ValueError, match="Fractional trading is not enabled"):
+            self._validate("10.50", fractional_enabled=False)
+
+    def test_fractional_count_fractional_enabled(self):
+        self._validate("10.50", fractional_enabled=True)
+        self._validate("0.01", fractional_enabled=True)
