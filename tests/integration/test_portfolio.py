@@ -257,7 +257,7 @@ class TestOrderMutations:
         order.amend(count_fp="1", yes_price_dollars="0.02")
 
         # Verify amendment - price should have changed
-        assert order.yes_price_dollars == "0.02"
+        assert float(order.yes_price_dollars) == 0.02
         assert order.yes_price_dollars != original_price
         assert order.status == OrderStatus.RESTING
 
@@ -277,7 +277,7 @@ class TestOrderMutations:
             yes_price_dollars="0.01",
         )
 
-        assert order.remaining_count_fp == "5"
+        assert float(order.remaining_count_fp) == 5
 
         # Decrease by 3
         decreased = client.portfolio.decrease_order(
@@ -286,7 +286,7 @@ class TestOrderMutations:
         )
 
         assert decreased.order_id == order.order_id
-        assert decreased.remaining_count_fp == "2"
+        assert float(decreased.remaining_count_fp) == 2
 
         # Cleanup
         client.portfolio.cancel_order(order.order_id)
@@ -306,7 +306,7 @@ class TestOrderMutations:
         # Use the order's decrease method
         order.decrease(reduce_by_fp="2")
 
-        assert order.remaining_count_fp == "3"
+        assert float(order.remaining_count_fp) == 3
 
         # Cleanup
         order.cancel()
@@ -457,7 +457,7 @@ class TestOrderMutations:
 
         assert len(result) == 1
         assert result[0].order_id is not None
-        assert result[0].yes_price_dollars == "0.01"
+        assert float(result[0].yes_price_dollars) == 0.01
 
         # Cleanup
         client.portfolio.batch_cancel_orders([result[0].order_id])
