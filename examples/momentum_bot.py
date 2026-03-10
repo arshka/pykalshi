@@ -177,7 +177,7 @@ class MomentumBot:
         self.log("-" * 50)
 
         balance = self.portfolio.get_balance()
-        self.log(f"Balance: ${balance.balance_dollars}")
+        self.log(f"Balance: ${balance.balance / 100:.2f}")
 
         with Feed(self.client) as feed:
             feed.on("ticker", self.handle_ticker)

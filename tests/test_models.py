@@ -17,10 +17,10 @@ from pykalshi.enums import Action, Side, OrderStatus
 
 
 def test_balance_model_validation():
-    data = {"balance_dollars": "10.00", "portfolio_value_dollars": "20.00"}
+    data = {"balance": 1000, "portfolio_value": 2000}
     model = BalanceModel.model_validate(data)
-    assert model.balance_dollars == "10.00"
-    assert model.portfolio_value_dollars == "20.00"
+    assert model.balance == 1000
+    assert model.portfolio_value == 2000
 
 
 def test_order_model_parsing():
@@ -57,7 +57,7 @@ def test_market_model_validation():
 
 def test_invalid_data_raises_error():
     with pytest.raises(ValueError):
-        BalanceModel.model_validate({"not_a_field": "bad"})
+        BalanceModel.model_validate({"not_a_field": 0})
 
 
 def test_fill_model_fee_cost_is_dollar_string():
@@ -69,8 +69,8 @@ def test_fill_model_fee_cost_is_dollar_string():
         "side": "yes",
         "action": "buy",
         "count_fp": "1.00",
-        "yes_price_dollars": "0.50",
-        "no_price_dollars": "0.50",
+        "yes_price_fixed": "0.50",
+        "no_price_fixed": "0.50",
         "fee_cost_dollars": "0.3200",
     }
     model = FillModel.model_validate(data)

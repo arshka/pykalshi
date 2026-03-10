@@ -33,6 +33,7 @@ from pykalshi.exceptions import (
     ResourceNotFoundError,
     RateLimitError,
 )
+from pykalshi._compat import cents_to_dollars
 
 load_dotenv()
 
@@ -286,8 +287,8 @@ def get_portfolio_summary():
             pass
 
     return {
-        "balance_dollars": balance.balance_dollars,
-        "portfolio_value_dollars": balance.portfolio_value_dollars,
+        "balance_dollars": cents_to_dollars(balance.balance),
+        "portfolio_value_dollars": cents_to_dollars(balance.portfolio_value),
         "position_count": len(positions),
         "total_exposure_dollars": str(total_exposure),
         "position_market_value_dollars": str(position_market_value),
@@ -327,11 +328,10 @@ def get_portfolio_history(days: int = 30, resolution: Optional[str] = None):
         if not ts or ts < min_ts:
             continue
 
-        # Settlement P&L = revenue - costs - fees (all dollar strings)
-        from decimal import Decimal as D
-        fee = D(settlement.fee_cost_dollars or "0")
-        delta = D(settlement.revenue_dollars) - D(settlement.yes_total_cost_dollars) - D(settlement.no_total_cost_dollars) - fee
-        events.append({'ts': ts, 'delta': str(delta), 'type': 'settlement'})
+        # Settlement P&L = revenue - costs - fees (costs/revenue in cents, fee in dollar string)
+        fee_cents = round(float(settlement.fee_cost or 0) * 100)
+        delta_cents = settlement.revenue - settlement.yes_total_cost - settlement.no_total_cost - fee_cents
+        events.append({'ts': ts, 'delta': cents_to_dollars(delta_cents), 'type': 'settlement'})
 
     if not events:
         return []

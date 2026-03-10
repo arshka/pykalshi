@@ -301,7 +301,7 @@ class TestDispatch:
                 "position_fp": "10.00",
                 "market_exposure_dollars": "4.50",
                 "realized_pnl_dollars": "2.50",
-                "total_traded_fp": "25.00",
+                "total_traded_dollars": "25.00",
                 "resting_orders_count": 2,
                 "fees_paid_dollars": "0.50",
             }
@@ -539,7 +539,7 @@ class TestMessageModels:
             position_fp="10.00",
             market_exposure_dollars="4.50",
             realized_pnl_dollars="2.50",
-            total_traded_fp="25.00",
+            total_traded_dollars="25.00",
             resting_orders_count=2,
             fees_paid_dollars="0.50",
             ts=1704067200,

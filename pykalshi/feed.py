@@ -15,7 +15,7 @@ from typing import Any, Callable, ClassVar, Union, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
-from ._compat import CompatModel, dollars_to_cents, fp_to_int, orderbook_to_legacy
+from ._compat import CompatModel, dollars_to_cents, fp_to_int, orderbook_to_legacy, _passthrough
 from ._utils import normalize_ticker, normalize_tickers
 
 if TYPE_CHECKING:
@@ -159,7 +159,8 @@ class PositionMessage(CompatModel):
         "position": ("position_fp", fp_to_int),
         "market_exposure": ("market_exposure_dollars", dollars_to_cents),
         "realized_pnl": ("realized_pnl_dollars", dollars_to_cents),
-        "total_traded": ("total_traded_fp", fp_to_int),
+        "total_traded": ("total_traded_dollars", dollars_to_cents),
+        "total_traded_fp": ("total_traded_dollars", _passthrough),
         "fees_paid": ("fees_paid_dollars", dollars_to_cents),
     }
 
@@ -167,7 +168,7 @@ class PositionMessage(CompatModel):
     position_fp: str | None = None
     market_exposure_dollars: str | None = None
     realized_pnl_dollars: str | None = None
-    total_traded_fp: str | None = None
+    total_traded_dollars: str | None = None
     resting_orders_count: int | None = None
     fees_paid_dollars: str | None = None
     ts: int | None = None

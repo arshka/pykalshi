@@ -396,7 +396,7 @@ class Portfolio:
         response = self._client.get(f"/portfolio/orders/{order_id}/queue_position")
         return QueuePositionModel(
             order_id=order_id,
-            queue_position=response.get("queue_position", 0)
+            queue_position_fp=response.get("queue_position_fp", "0.00"),
         )
 
     def get_queue_positions(
@@ -906,7 +906,7 @@ class AsyncPortfolio(Portfolio):
 
     async def get_queue_position(self, order_id: str) -> QueuePositionModel:  # type: ignore[override]
         response = await self._client.get(f"/portfolio/orders/{order_id}/queue_position")
-        return QueuePositionModel(order_id=order_id, queue_position=response.get("queue_position", 0))
+        return QueuePositionModel(order_id=order_id, queue_position_fp=response.get("queue_position_fp", "0.00"))
 
     async def get_queue_positions(self, *, market_tickers=None, event_ticker=None) -> DataFrameList[QueuePositionModel]:  # type: ignore[override]
         params: dict = {}

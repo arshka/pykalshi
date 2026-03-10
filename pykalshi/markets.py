@@ -80,8 +80,8 @@ class Market:
         return self.data.open_interest_fp
 
     @property
-    def liquidity_fp(self) -> str | None:
-        return self.data.liquidity_fp
+    def liquidity_dollars(self) -> str | None:
+        return self.data.liquidity_dollars
 
     @property
     def open_time(self) -> str | None:

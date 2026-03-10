@@ -67,8 +67,8 @@ class TestToDataFrame:
                 side=Side.YES,
                 action=Action.BUY,
                 count_fp="5.00",
-                yes_price_dollars="0.45",
-                no_price_dollars="0.55",
+                yes_price_fixed="0.45",
+                no_price_fixed="0.55",
             ),
         ]
 
@@ -77,7 +77,7 @@ class TestToDataFrame:
         assert len(df) == 1
         assert df.iloc[0]["ticker"] == "BTC-50K"
         assert df.iloc[0]["count_fp"] == "5.00"
-        assert df.iloc[0]["yes_price_dollars"] == "0.45"
+        assert df.iloc[0]["yes_price_fixed"] == "0.45"
 
     def test_market_models(self):
         """Convert list of MarketModel to DataFrame."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from .models import ExchangeStatus, Announcement
+from .exceptions import KalshiAPIError
 
 if TYPE_CHECKING:
     from .client import KalshiClient
@@ -14,7 +15,13 @@ class Exchange:
 
     def get_status(self) -> ExchangeStatus:
         """Get current exchange operational status."""
-        data = self._client.get("/exchange/status")
+        try:
+            data = self._client.get("/exchange/status")
+        except KalshiAPIError as e:
+            if e.status_code == 503 and isinstance(e.response_body, dict):
+                data = e.response_body
+            else:
+                raise
         return ExchangeStatus.model_validate(data)
 
     def is_trading(self) -> bool:
@@ -41,7 +48,13 @@ class AsyncExchange(Exchange):
     """Async variant of Exchange."""
 
     async def get_status(self) -> ExchangeStatus:  # type: ignore[override]
-        data = await self._client.get("/exchange/status")
+        try:
+            data = await self._client.get("/exchange/status")
+        except KalshiAPIError as e:
+            if e.status_code == 503 and isinstance(e.response_body, dict):
+                data = e.response_body
+            else:
+                raise
         return ExchangeStatus.model_validate(data)
 
     async def is_trading(self) -> bool:  # type: ignore[override]

@@ -115,12 +115,15 @@ class TestOrderModelLegacy:
 
 
 class TestBalanceModelLegacy:
-    def test_balance_legacy(self):
-        m = BalanceModel(balance_dollars="50.00", portfolio_value_dollars="100.00")
+    def test_balance_dollars_legacy(self):
+        m = BalanceModel(balance=5000, portfolio_value=10000)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            assert m.balance == 5000
+            val = m.balance_dollars
+            assert val == "50.00"
             assert len(w) == 1
+            assert "balance_dollars" in str(w[0].message)
+            assert issubclass(w[0].category, DeprecationWarning)
 
 
 class TestPositionModelLegacy:
@@ -150,22 +153,34 @@ class TestOrderbookLegacy:
 
 
 class TestSettlementModelLegacy:
-    def test_revenue_legacy(self):
-        m = SettlementModel(ticker="TEST", market_ticker="TEST", revenue_dollars="10.00")
+    def test_revenue_dollars_legacy(self):
+        m = SettlementModel(ticker="TEST", revenue=1000)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            assert m.revenue == 1000
+            val = m.revenue_dollars
+            assert val == "10.00"
             assert len(w) == 1
+            assert "revenue_dollars" in str(w[0].message)
+            assert issubclass(w[0].category, DeprecationWarning)
 
 
 class TestFillModelLegacy:
     def test_count_legacy(self):
         m = FillModel(trade_id="t1", ticker="TEST", order_id="o1",
                       side="yes", action="buy", count_fp="5.00",
-                      yes_price_dollars="0.50", no_price_dollars="0.50")
+                      yes_price_fixed="0.50", no_price_fixed="0.50")
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             assert m.count == 5
+            assert len(w) == 1
+
+    def test_yes_price_dollars_legacy(self):
+        m = FillModel(trade_id="t1", ticker="TEST", order_id="o1",
+                      side="yes", action="buy", count_fp="5.00",
+                      yes_price_fixed="0.50", no_price_fixed="0.50")
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            assert m.yes_price_dollars == "0.50"
             assert len(w) == 1
 
 

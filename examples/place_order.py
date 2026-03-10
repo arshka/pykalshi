@@ -25,7 +25,7 @@ portfolio = client.portfolio
 
 # Check balance first
 balance = portfolio.get_balance()
-print(f"Available balance: ${balance.balance_dollars}")
+print(f"Available balance: ${balance.balance / 100:.2f}")
 
 # --- Place a Limit Order ---
 

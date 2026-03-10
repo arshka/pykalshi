@@ -154,6 +154,22 @@ def _pnl_dollars(v: str | None) -> str:
     return f'<span class="{cls}">{sign}${v}</span>'
 
 
+def _cents_display(v: int | None) -> str:
+    """Format cents integer as dollar display."""
+    if v is None:
+        return "—"
+    from ._compat import cents_to_dollars
+    return f"${cents_to_dollars(v)}"
+
+
+def _pnl_cents(v: int) -> str:
+    """Format P&L in cents with color."""
+    from ._compat import cents_to_dollars
+    cls = "g" if v >= 0 else "r"
+    sign = "+" if v > 0 else ""
+    return f'<span class="{cls}">{sign}${cents_to_dollars(v)}</span>'
+
+
 def _row(label: str, value: str, mono: bool = False) -> str:
     cls = ' class="m"' if mono else ""
     return f"<tr><th>{label}</th><td{cls}>{value}</td></tr>"
@@ -302,8 +318,8 @@ def event_html(e: Event) -> str:
 
 def balance_html(b: BalanceModel) -> str:
     rows = [
-        _row("Balance", _dollars(b.balance_dollars)),
-        _row("Portfolio", _dollars(b.portfolio_value_dollars)),
+        _row("Balance", _cents_display(b.balance)),
+        _row("Portfolio", _cents_display(b.portfolio_value)),
     ]
     return _wrap(f"<table>{''.join(rows)}</table>")
 
@@ -343,7 +359,7 @@ def fill_html(f: FillModel) -> str:
         _row("Ticker", _ticker_link(f.ticker)),
         _row("Side", _side_pill(action, side)),
         _row("Count", _fp(f.count_fp)),
-        _row("Price", _dollars(f.yes_price_dollars)),
+        _row("Price", _dollars(f.yes_price_fixed)),
         _row("Role", role),
     ]
     return _wrap(f"<table>{''.join(rows)}</table>")
@@ -414,8 +430,8 @@ def settlement_html(s: SettlementModel) -> str:
         _row("Ticker", _ticker_link(s.ticker, s.event_ticker)),
         _row("Result", _result_pill(s.market_result)),
         _row("Position", position_str),
-        _row("Revenue", _dollars(s.revenue_dollars)),
-        _row("P&L", _pnl_dollars(s.pnl)),
+        _row("Revenue", _cents_display(s.revenue)),
+        _row("P&L", _pnl_cents(s.pnl)),
     ]
 
     if s.settled_time:
@@ -509,8 +525,9 @@ def api_key_html(k: APIKey) -> str:
 
 
 def queue_position_html(q: QueuePositionModel) -> str:
-    pos_display = f"#{q.queue_position + 1}"
-    pos_class = "g" if q.queue_position < 3 else "y" if q.queue_position < 10 else "d"
+    pos_int = round(float(q.queue_position_fp))
+    pos_display = f"#{pos_int + 1}"
+    pos_class = "g" if pos_int < 3 else "y" if pos_int < 10 else "d"
 
     rows = [
         _row("Order ID", _mono_id(q.order_id)),

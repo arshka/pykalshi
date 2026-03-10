@@ -48,6 +48,11 @@ def orderbook_to_legacy(levels: list[tuple[str, str]] | None) -> list[tuple[int,
     return [(int(Decimal(p) * 100), int(Decimal(q))) for p, q in levels]
 
 
+def _passthrough(val: Any) -> Any:
+    """Identity converter for renamed fields with the same type."""
+    return val
+
+
 # --- CompatModel base class ---
 
 class CompatModel(BaseModel):

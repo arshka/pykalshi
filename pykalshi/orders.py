@@ -106,7 +106,7 @@ class Order:
         """
         updated = self._client.portfolio.amend_order(
             self.order_id,
-            count_fp=count_fp if count_fp is not None else self.remaining_count_fp,
+            count_fp=count_fp,
             yes_price_dollars=yes_price_dollars,
             no_price_dollars=no_price_dollars,
             count=count, yes_price=yes_price, no_price=no_price,
@@ -213,7 +213,7 @@ class AsyncOrder(Order):
     ) -> AsyncOrder:
         updated = await self._client.portfolio.amend_order(
             self.order_id,
-            count_fp=count_fp if count_fp is not None else self.remaining_count_fp,
+            count_fp=count_fp,
             yes_price_dollars=yes_price_dollars,
             no_price_dollars=no_price_dollars,
             count=count, yes_price=yes_price, no_price=no_price,

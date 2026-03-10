@@ -4,7 +4,7 @@ from functools import cached_property
 from typing import ClassVar, Callable
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from .enums import OrderStatus, Side, Action, OrderType, MarketStatus
-from ._compat import CompatModel, dollars_to_cents, fp_to_int, orderbook_to_legacy
+from ._compat import CompatModel, dollars_to_cents, fp_to_int, orderbook_to_legacy, cents_to_dollars, _passthrough
 
 
 class MveSelectedLeg(CompatModel):
@@ -62,7 +62,7 @@ class MarketModel(CompatModel):
     volume_fp: str | None = None
     volume_24h_fp: str | None = None
     open_interest_fp: str | None = None
-    liquidity_fp: str | None = None
+    liquidity_dollars: str | None = None
 
     # Market structure
     tick_size_dollars: str | None = None
@@ -93,7 +93,8 @@ class MarketModel(CompatModel):
         "volume": ("volume_fp", fp_to_int),
         "volume_24h": ("volume_24h_fp", fp_to_int),
         "open_interest": ("open_interest_fp", fp_to_int),
-        "liquidity": ("liquidity_fp", fp_to_int),
+        "liquidity": ("liquidity_dollars", dollars_to_cents),
+        "liquidity_fp": ("liquidity_dollars", _passthrough),
     }
 
     model_config = ConfigDict(extra="ignore")
@@ -170,15 +171,15 @@ class OrderModel(CompatModel):
 
 
 class BalanceModel(CompatModel):
-    """Pydantic model for Balance data. Values are dollar strings."""
+    """Pydantic model for Balance data. Values are cents integers."""
 
-    balance_dollars: str
-    portfolio_value_dollars: str
+    balance: int
+    portfolio_value: int
     updated_ts: int | None = None
 
     _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "balance": ("balance_dollars", dollars_to_cents),
-        "portfolio_value": ("portfolio_value_dollars", dollars_to_cents),
+        "balance_dollars": ("balance", cents_to_dollars),
+        "portfolio_value_dollars": ("portfolio_value", cents_to_dollars),
     }
 
     model_config = ConfigDict(extra="ignore")
@@ -194,7 +195,7 @@ class PositionModel(CompatModel):
     ticker: str
     position_fp: str  # Net position (positive = yes, negative = no)
     market_exposure_dollars: str | None = None
-    total_traded_fp: str | None = None
+    total_traded_dollars: str | None = None
     resting_orders_count: int | None = None
     fees_paid_dollars: str | None = None
     realized_pnl_dollars: str | None = None
@@ -202,7 +203,8 @@ class PositionModel(CompatModel):
 
     _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
         "position": ("position_fp", fp_to_int),
-        "total_traded": ("total_traded_fp", fp_to_int),
+        "total_traded": ("total_traded_dollars", dollars_to_cents),
+        "total_traded_fp": ("total_traded_dollars", _passthrough),
         "market_exposure": ("market_exposure_dollars", dollars_to_cents),
         "fees_paid": ("fees_paid_dollars", dollars_to_cents),
         "realized_pnl": ("realized_pnl_dollars", dollars_to_cents),
@@ -224,8 +226,8 @@ class FillModel(CompatModel):
     side: Side
     action: Action
     count_fp: str
-    yes_price_dollars: str
-    no_price_dollars: str
+    yes_price_fixed: str
+    no_price_fixed: str
     is_taker: bool | None = None
     fill_id: str | None = None
     market_ticker: str | None = None
@@ -235,9 +237,11 @@ class FillModel(CompatModel):
 
     _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
         "count": ("count_fp", fp_to_int),
-        "yes_price": ("yes_price_dollars", dollars_to_cents),
-        "no_price": ("no_price_dollars", dollars_to_cents),
+        "yes_price": ("yes_price_fixed", dollars_to_cents),
+        "no_price": ("no_price_fixed", dollars_to_cents),
         "fee_cost": ("fee_cost_dollars", dollars_to_cents),
+        "yes_price_dollars": ("yes_price_fixed", _passthrough),
+        "no_price_dollars": ("no_price_fixed", _passthrough),
     }
 
     model_config = ConfigDict(extra="ignore")
@@ -600,21 +604,21 @@ class SettlementModel(CompatModel):
     market_result: str | None = None  # "yes" or "no"
     yes_count_fp: str = "0"
     no_count_fp: str = "0"
-    yes_total_cost_dollars: str = "0"
-    no_total_cost_dollars: str = "0"
-    revenue_dollars: str = "0"
-    value_dollars: str = "0"
-    fee_cost_dollars: str | None = None
+    yes_total_cost: int = 0
+    no_total_cost: int = 0
+    revenue: int = 0
+    value: int = 0
+    fee_cost: str | None = None  # FixedPointDollars string (e.g. "0.3200")
     settled_time: str | None = None
 
     _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
         "yes_count": ("yes_count_fp", fp_to_int),
         "no_count": ("no_count_fp", fp_to_int),
-        "yes_total_cost": ("yes_total_cost_dollars", dollars_to_cents),
-        "no_total_cost": ("no_total_cost_dollars", dollars_to_cents),
-        "revenue": ("revenue_dollars", dollars_to_cents),
-        "value": ("value_dollars", dollars_to_cents),
-        "fee_cost": ("fee_cost_dollars", dollars_to_cents),
+        "yes_total_cost_dollars": ("yes_total_cost", cents_to_dollars),
+        "no_total_cost_dollars": ("no_total_cost", cents_to_dollars),
+        "revenue_dollars": ("revenue", cents_to_dollars),
+        "value_dollars": ("value", cents_to_dollars),
+        "fee_cost_dollars": ("fee_cost", _passthrough),
     }
 
     model_config = ConfigDict(extra="ignore")
@@ -625,27 +629,24 @@ class SettlementModel(CompatModel):
         return str(Decimal(self.yes_count_fp) - Decimal(self.no_count_fp))
 
     @property
-    def pnl(self) -> str:
-        """Net P&L in dollars (dollar string)."""
-        fee = Decimal(self.fee_cost_dollars or "0")
-        return str(
-            Decimal(self.revenue_dollars)
-            - Decimal(self.yes_total_cost_dollars)
-            - Decimal(self.no_total_cost_dollars)
-            - fee
-        )
+    def pnl(self) -> int:
+        """Net P&L in cents (revenue - costs - fees)."""
+        fee_cents = round(float(self.fee_cost or 0) * 100)
+        return self.revenue - self.yes_total_cost - self.no_total_cost - fee_cents
 
     def _repr_html_(self) -> str:
         from ._repr import settlement_html
         return settlement_html(self)
 
 
-class QueuePositionModel(BaseModel):
+class QueuePositionModel(CompatModel):
     """Order's position in the queue at its price level."""
     order_id: str
-    queue_position: int  # 0-indexed position in queue
+    queue_position_fp: str  # 0-indexed, fixed-point string (e.g. "0.00")
 
-    model_config = ConfigDict(extra="ignore")
+    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
+        "queue_position": ("queue_position_fp", fp_to_int),
+    }
 
     def _repr_html_(self) -> str:
         from ._repr import queue_position_html

@@ -8,14 +8,14 @@ from pykalshi.portfolio import Portfolio
 def test_user_balance_workflow(client, mock_response):
     """Test fetching user balance."""
     client._session.request.return_value = mock_response(
-        {"balance_dollars": "50.00", "portfolio_value_dollars": "100.00"}
+        {"balance": 5000, "portfolio_value": 10000}
     )
 
     balance = client.portfolio.get_balance()
 
     # Verify values
-    assert balance.balance_dollars == "50.00"
-    assert balance.portfolio_value_dollars == "100.00"
+    assert balance.balance == 5000
+    assert balance.portfolio_value == 10000
 
     # Verify endpoint called
     client._session.request.assert_called_with(

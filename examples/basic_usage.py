@@ -20,10 +20,10 @@ client = KalshiClient.from_env()
 
 portfolio = client.portfolio
 
-# Check balance (values are dollar strings)
+# Check balance (values are cents integers)
 balance = portfolio.get_balance()
-print(f"Balance: ${balance.balance_dollars}")
-print(f"Portfolio value: ${balance.portfolio_value_dollars}")
+print(f"Balance: ${balance.balance / 100:.2f}")
+print(f"Portfolio value: ${balance.portfolio_value / 100:.2f}")
 
 # View positions
 positions = portfolio.get_positions()
@@ -35,7 +35,7 @@ for pos in positions[:5]:  # Show first 5
 fills = portfolio.get_fills(limit=5)
 print(f"\nRecent fills:")
 for fill in fills:
-    print(f"  {fill.ticker}: {fill.action} {fill.count_fp}x @ ${fill.yes_price_dollars}")
+    print(f"  {fill.ticker}: {fill.action} {fill.count_fp}x @ ${fill.yes_price_fixed}")
 
 # --- Markets ---
 

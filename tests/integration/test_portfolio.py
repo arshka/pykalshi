@@ -504,11 +504,11 @@ class TestOrderMutations:
         queue_pos = client.portfolio.get_queue_position(order.order_id)
 
         assert hasattr(queue_pos, "order_id")
-        assert hasattr(queue_pos, "queue_position")
+        assert hasattr(queue_pos, "queue_position_fp")
         assert queue_pos.order_id == order.order_id
-        # Queue position should be a non-negative integer
-        assert isinstance(queue_pos.queue_position, int)
-        assert queue_pos.queue_position >= 0
+        # Queue position should be a fixed-point string
+        assert isinstance(queue_pos.queue_position_fp, str)
+        assert float(queue_pos.queue_position_fp) >= 0
 
         # Cleanup
         order.cancel()
@@ -544,9 +544,9 @@ class TestOrderMutations:
             # Should have results (may include our orders and others)
             assert len(queue_positions) >= 0
 
-            # Verify queue_position is an int for all results
+            # Verify queue_position_fp is a string for all results
             for qp in queue_positions:
-                assert isinstance(qp.queue_position, int)
+                assert isinstance(qp.queue_position_fp, str)
                 assert qp.order_id is not None
         finally:
             # Cleanup
