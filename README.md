@@ -22,7 +22,7 @@ from pykalshi import KalshiClient, Action, Side
 client = KalshiClient()
 
 # Place a trade
-order = client.portfolio.place_order("KXBTC-25MAR15-B100000", Action.BUY, Side.YES, count=10, yes_price=45)
+order = client.portfolio.place_order("KXBTC-25MAR15-B100000", Action.BUY, Side.YES, count_fp="10", yes_price_dollars="0.45")
 order.wait_until_terminal()  # Block until filled/canceled
 ```
 
@@ -69,7 +69,7 @@ btc_markets = client.get_markets(series_ticker="KXBTC")
 
 # Get a specific market
 market = client.get_market("KXBTC-25MAR15-B100000")
-print(f"{market.title}: {market.yes_bid}¢ / {market.yes_ask}¢")
+print(f"{market.title}: ${market.yes_bid_dollars} / ${market.yes_ask_dollars}")
 
 # Market data
 orderbook = market.get_orderbook()
@@ -87,10 +87,10 @@ balance = client.portfolio.get_balance()
 print(f"${balance.balance / 100:.2f} available")
 
 # Limit order
-order = client.portfolio.place_order(market, Action.BUY, Side.YES, count=10, yes_price=50)
+order = client.portfolio.place_order(market, Action.BUY, Side.YES, count_fp="10", yes_price_dollars="0.50")
 
 # Market order
-order = client.portfolio.place_order(market, Action.BUY, Side.YES, count=10, order_type=OrderType.MARKET)
+order = client.portfolio.place_order(market, Action.BUY, Side.YES, count_fp="10", order_type=OrderType.MARKET)
 
 # Manage orders
 order.wait_until_terminal()  # Block until filled/canceled
@@ -116,7 +116,7 @@ async with Feed(client) as feed:
     async for msg in feed:
         match msg:
             case TickerMessage():
-                print(f"Price: {msg.price}¢")
+                print(f"Price: ${msg.price_dollars}")
             case OrderbookSnapshotMessage():
                 print(f"Book: {len(msg.yes)} yes levels, {len(msg.no)} no levels")
 ```
@@ -134,7 +134,7 @@ async with Feed(client) as feed:
     async for msg in feed:
         manager.apply(msg)
         book = manager.get(ticker)
-        best_bid = book["yes"][0] if book["yes"] else None
+        best_bid = book["yes_dollars"][0] if book["yes_dollars"] else None
 ```
 
 ### pandas Integration
