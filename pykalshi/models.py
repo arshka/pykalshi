@@ -339,8 +339,8 @@ class CandlestickResponse(BaseModel):
 class Orderbook(CompatModel):
     """Orderbook with yes/no price levels (dollar strings)."""
 
-    yes_dollars: list[tuple[str, str]] | None = None  # [(price_dollars, quantity_fp), ...]
-    no_dollars: list[tuple[str, str]] | None = None
+    yes_dollars: list[tuple[str, str | int]] | None = None  # [(price_dollars, quantity_fp), ...]
+    no_dollars: list[tuple[str, str | int]] | None = None
 
     _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
         "yes": ("yes_dollars", orderbook_to_legacy),
