@@ -22,7 +22,7 @@ from pykalshi.feed import (
     TickerMessage, OrderbookSnapshotMessage, OrderbookDeltaMessage,
     TradeMessage, FillMessage, PositionMessage,
 )
-from pykalshi.enums import Action, Side, OrderType, OrderStatus
+from pykalshi.enums import Action, Side, OrderStatus
 from pykalshi.portfolio import Portfolio
 
 
@@ -348,6 +348,25 @@ class TestDecreaseOrderLegacyParams:
         call_args = client._session.request.call_args
         body = json.loads(call_args.kwargs["content"])
         assert body["reduce_by_fp"] == "3.00"
+
+
+class TestOrderTypeDeprecation:
+    def test_order_type_warns(self, client, mock_response):
+        from pykalshi.enums import OrderType
+
+        client._session.request.return_value = mock_response(
+            {"order": {"order_id": "o1", "ticker": "TEST", "status": "resting",
+                        "yes_price_dollars": "0.45", "initial_count_fp": "5.00"}}
+        )
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            client.portfolio.place_order(
+                "TEST", Action.BUY, Side.YES, "5.00",
+                yes_price_dollars="0.45", order_type=OrderType.LIMIT,
+            )
+        deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+        assert any("order_type" in str(x.message) for x in deprecation_warnings)
 
 
 class TestBatchOrdersLegacyParams:

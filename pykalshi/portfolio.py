@@ -39,7 +39,6 @@ class Portfolio:
         action: Action,
         side: Side,
         count_fp: str | None = None,
-        order_type: OrderType = OrderType.LIMIT,
         *,
         yes_price_dollars: str | None = None,
         no_price_dollars: str | None = None,
@@ -58,6 +57,8 @@ class Portfolio:
         yes_price: int | None = None,
         no_price: int | None = None,
         buy_max_cost: int | None = None,
+        # Deprecated — Kalshi only supports limit orders
+        order_type: OrderType | None = None,
     ) -> Order:
         """Place an order on a market.
 
@@ -66,8 +67,6 @@ class Portfolio:
             action: BUY or SELL.
             side: YES or NO.
             count_fp: Number of contracts (fixed-point string, e.g. "10.00").
-            order_type: LIMIT or MARKET. Market orders are simulated as
-                        aggressive limit orders ($0.99 buy / $0.01 sell).
             yes_price_dollars: Price as dollar string (e.g. "0.45").
             no_price_dollars: Price as dollar string. Converted to
                 yes_price_dollars internally (yes = 1.00 - no).
@@ -104,8 +103,17 @@ class Portfolio:
             pls = getattr(ticker, 'price_level_structure', None)
             fte = getattr(ticker, 'fractional_trading_enabled', None)
 
+        if order_type is not None:
+            import warnings
+            warnings.warn(
+                "order_type is deprecated — Kalshi only supports limit orders. "
+                "Pass yes_price_dollars or no_price_dollars instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         order_data = self._build_order_data(
-            ticker, action, side, count_fp, order_type,
+            ticker, action, side, count_fp,
             yes_price_dollars=yes_price_dollars, no_price_dollars=no_price_dollars,
             client_order_id=client_order_id, time_in_force=time_in_force,
             post_only=post_only, reduce_only=reduce_only,
@@ -636,7 +644,6 @@ class Portfolio:
         action: Action,
         side: Side,
         count_fp: str,
-        order_type: OrderType = OrderType.LIMIT,
         *,
         yes_price_dollars=None,
         no_price_dollars=None,
@@ -655,23 +662,13 @@ class Portfolio:
     ) -> dict:
         """Build and validate order data dict. No I/O.
 
-        Market orders are simulated as aggressive limit orders ($0.99 buy / $0.01 sell)
-        because the Kalshi API no longer supports the "market" order type.
-
         If price_level_structure is provided, validates tick size alignment.
         If fractional_trading_enabled is provided (False), validates count_fp is whole.
         """
         if yes_price_dollars is not None and no_price_dollars is not None:
             raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
 
-        # Simulate market orders as aggressive limit orders
-        if order_type == OrderType.MARKET:
-            if yes_price_dollars is not None or no_price_dollars is not None:
-                raise ValueError("Market orders should not specify a price")
-            if post_only:
-                raise ValueError("post_only is incompatible with market orders")
-            yes_price_dollars = "0.99" if action == Action.BUY else "0.01"
-        elif yes_price_dollars is None and no_price_dollars is None:
+        if yes_price_dollars is None and no_price_dollars is None:
             raise ValueError("Limit orders require yes_price_dollars or no_price_dollars")
 
         if no_price_dollars is not None:
@@ -749,16 +746,24 @@ class AsyncPortfolio(Portfolio):
         action: Action,
         side: Side,
         count_fp: str | None = None,
-        order_type: OrderType = OrderType.LIMIT,
         **kwargs,
     ) -> AsyncOrder:
         # Convert deprecated legacy integer params
         convert_legacy_kwargs(kwargs, PLACE_ORDER_LEGACY)
+        order_type = kwargs.pop("order_type", None)
+        if order_type is not None:
+            import warnings
+            warnings.warn(
+                "order_type is deprecated — Kalshi only supports limit orders. "
+                "Pass yes_price_dollars or no_price_dollars instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         count_fp = count_fp or kwargs.pop("count_fp", None)
         if count_fp is None:
             raise ValueError("count_fp is required (or use deprecated 'count' param)")
         order_data = self._build_order_data(
-            ticker, action, side, count_fp, order_type, **kwargs
+            ticker, action, side, count_fp, **kwargs
         )
         response = await self._client.post("/portfolio/orders", order_data)
         model = OrderModel.model_validate(response["order"])
