@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 from .orders import Order, AsyncOrder
-from .enums import Action, Side, OrderType, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
+from .enums import Action, Side, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
 from .dataframe import DataFrameList
 from ._compat import (
     convert_legacy_kwargs,
@@ -39,7 +39,6 @@ class Portfolio:
         action: Action,
         side: Side,
         count_fp: str | None = None,
-        order_type: OrderType = OrderType.LIMIT,
         *,
         yes_price_dollars: str | None = None,
         no_price_dollars: str | None = None,
@@ -66,8 +65,6 @@ class Portfolio:
             action: BUY or SELL.
             side: YES or NO.
             count_fp: Number of contracts (fixed-point string, e.g. "10.00").
-            order_type: LIMIT or MARKET. Market orders are simulated as
-                        aggressive limit orders ($0.99 buy / $0.01 sell).
             yes_price_dollars: Price as dollar string (e.g. "0.45").
             no_price_dollars: Price as dollar string. Converted to
                 yes_price_dollars internally (yes = 1.00 - no).
@@ -105,7 +102,7 @@ class Portfolio:
             fte = getattr(ticker, 'fractional_trading_enabled', None)
 
         order_data = self._build_order_data(
-            ticker, action, side, count_fp, order_type,
+            ticker, action, side, count_fp,
             yes_price_dollars=yes_price_dollars, no_price_dollars=no_price_dollars,
             client_order_id=client_order_id, time_in_force=time_in_force,
             post_only=post_only, reduce_only=reduce_only,
@@ -351,12 +348,12 @@ class Portfolio:
 
         Args:
             orders: List of order dicts with keys: ticker, action, side, count_fp,
-                    type, yes_price_dollars/no_price_dollars, and optional advanced params.
+                    yes_price_dollars/no_price_dollars, and optional advanced params.
 
         Example:
             orders = [
-                {"ticker": "KXBTC", "action": "buy", "side": "yes", "count_fp": "10.00", "type": "limit", "yes_price_dollars": "0.45"},
-                {"ticker": "KXBTC", "action": "buy", "side": "no", "count_fp": "10.00", "type": "limit", "no_price_dollars": "0.45"},
+                {"ticker": "KXBTC", "action": "buy", "side": "yes", "count_fp": "10.00", "yes_price_dollars": "0.45"},
+                {"ticker": "KXBTC", "action": "buy", "side": "no", "count_fp": "10.00", "no_price_dollars": "0.45"},
             ]
             results = portfolio.batch_place_orders(orders)
         """
@@ -636,7 +633,6 @@ class Portfolio:
         action: Action,
         side: Side,
         count_fp: str,
-        order_type: OrderType = OrderType.LIMIT,
         *,
         yes_price_dollars=None,
         no_price_dollars=None,
@@ -655,23 +651,13 @@ class Portfolio:
     ) -> dict:
         """Build and validate order data dict. No I/O.
 
-        Market orders are simulated as aggressive limit orders ($0.99 buy / $0.01 sell)
-        because the Kalshi API no longer supports the "market" order type.
-
         If price_level_structure is provided, validates tick size alignment.
         If fractional_trading_enabled is provided (False), validates count_fp is whole.
         """
         if yes_price_dollars is not None and no_price_dollars is not None:
             raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
 
-        # Simulate market orders as aggressive limit orders
-        if order_type == OrderType.MARKET:
-            if yes_price_dollars is not None or no_price_dollars is not None:
-                raise ValueError("Market orders should not specify a price")
-            if post_only:
-                raise ValueError("post_only is incompatible with market orders")
-            yes_price_dollars = "0.99" if action == Action.BUY else "0.01"
-        elif yes_price_dollars is None and no_price_dollars is None:
+        if yes_price_dollars is None and no_price_dollars is None:
             raise ValueError("Limit orders require yes_price_dollars or no_price_dollars")
 
         if no_price_dollars is not None:
@@ -692,7 +678,6 @@ class Portfolio:
             "action": action.value,
             "side": side.value,
             "count_fp": count_fp,
-            "type": "limit",
             "yes_price_dollars": yes_price_dollars,
         }
         if client_order_id is not None:
@@ -727,10 +712,12 @@ class Portfolio:
             convert_legacy_kwargs(o, BATCH_ORDER_LEGACY)
             if "yes_price_dollars" in o and "no_price_dollars" in o:
                 raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
-            if o.get("type", "limit") == "limit" and "yes_price_dollars" not in o and "no_price_dollars" not in o:
+            if "yes_price_dollars" not in o and "no_price_dollars" not in o:
                 raise ValueError("Limit orders require yes_price_dollars or no_price_dollars")
             if "no_price_dollars" in o:
                 o["yes_price_dollars"] = str(Decimal("1") - Decimal(o.pop("no_price_dollars")))
+            # Strip "type" — Kalshi API no longer accepts it
+            o.pop("type", None)
             prepared.append(o)
         return prepared
 
@@ -748,7 +735,6 @@ class AsyncPortfolio(Portfolio):
         action: Action,
         side: Side,
         count_fp: str | None = None,
-        order_type: OrderType = OrderType.LIMIT,
         **kwargs,
     ) -> AsyncOrder:
         # Convert deprecated legacy integer params
@@ -757,7 +743,7 @@ class AsyncPortfolio(Portfolio):
         if count_fp is None:
             raise ValueError("count_fp is required (or use deprecated 'count' param)")
         order_data = self._build_order_data(
-            ticker, action, side, count_fp, order_type, **kwargs
+            ticker, action, side, count_fp, **kwargs
         )
         response = await self._client.post("/portfolio/orders", order_data)
         model = OrderModel.model_validate(response["order"])

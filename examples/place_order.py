@@ -12,7 +12,6 @@ from pykalshi import (
     KalshiClient,
     Action,
     Side,
-    OrderType,
     OrderStatus,
     MarketStatus,
     InsufficientFundsError,
@@ -58,22 +57,6 @@ print(f"  Current: ${market.yes_bid_dollars} bid / ${market.yes_ask_dollars} ask
 #     print(f"Order rejected: {e.message}")
 
 
-# --- Place a Market Order ---
-
-# Market orders execute immediately at best available price
-# try:
-#     order = portfolio.place_order(
-#         market,
-#         action=Action.BUY,
-#         side=Side.YES,
-#         count_fp="5.00",
-#         order_type=OrderType.MARKET,
-#     )
-#     print(f"Market order filled: {order.order_id}")
-# except InsufficientFundsError:
-#     print("Not enough balance")
-
-
 # --- View and Manage Orders ---
 
 # Get your open orders
@@ -109,7 +92,7 @@ for order in orders[:3]:
 #             action=Action.SELL,
 #             side=Side.YES,
 #             count_fp=pos.position_fp,
-#             order_type=OrderType.MARKET,
+#             yes_price_dollars="0.01",  # Aggressive price to fill quickly
 #         )
 #         print(f"Closed position in {pos.ticker}")
 

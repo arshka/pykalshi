@@ -1,7 +1,7 @@
 import pytest
 import json
 from unittest.mock import ANY
-from pykalshi.enums import Action, Side, OrderType, OrderStatus
+from pykalshi.enums import Action, Side, OrderStatus
 from pykalshi.portfolio import Portfolio
 
 

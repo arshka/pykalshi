@@ -80,17 +80,14 @@ candles = market.get_candlesticks(start_ts, end_ts, period=CandlestickPeriod.ONE
 ### Trading
 
 ```python
-from pykalshi import Action, Side, OrderType, OrderStatus
+from pykalshi import Action, Side, OrderStatus
 
 # Check balance
 balance = client.portfolio.get_balance()
 print(f"${balance.balance / 100:.2f} available")
 
-# Limit order
+# Place an order
 order = client.portfolio.place_order(market, Action.BUY, Side.YES, count_fp="10", yes_price_dollars="0.50")
-
-# Market order
-order = client.portfolio.place_order(market, Action.BUY, Side.YES, count_fp="10", order_type=OrderType.MARKET)
 
 # Manage orders
 order.wait_until_terminal()  # Block until filled/canceled

@@ -28,7 +28,6 @@ from pykalshi import (
     TickerMessage,
     Action,
     Side,
-    OrderType,
     MarketStatus,
     InsufficientFundsError,
 )
