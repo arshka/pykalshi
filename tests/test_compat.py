@@ -364,6 +364,7 @@ class TestBatchOrdersLegacyParams:
         assert prepared[0]["yes_price_dollars"] == "0.45"
         assert "count" not in prepared[0]
         assert "yes_price" not in prepared[0]
+        assert "type" not in prepared[0]  # "type" is stripped before sending to API
 
 
 class TestOrderGroupLegacyParams:

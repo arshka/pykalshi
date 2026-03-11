@@ -411,7 +411,6 @@ class TestOrderMutations:
                 "action": "buy",
                 "side": "yes",
                 "count_fp": "1",
-                "type": "limit",
                 "yes_price_dollars": "0.01",
             },
             {
@@ -419,7 +418,6 @@ class TestOrderMutations:
                 "action": "buy",
                 "side": "yes",
                 "count_fp": "1",
-                "type": "limit",
                 "yes_price_dollars": "0.02",
             },
         ]
@@ -448,7 +446,6 @@ class TestOrderMutations:
                 "action": "buy",
                 "side": "no",
                 "count_fp": "1",
-                "type": "limit",
                 "no_price_dollars": "0.99",  # Should become yes_price_dollars="0.01"
             },
         ]
@@ -473,7 +470,6 @@ class TestOrderMutations:
                 "action": "buy",
                 "side": "yes",
                 "count_fp": "1",
-                "type": "limit",
                 "yes_price_dollars": "0.45",
                 "no_price_dollars": "0.55",
             }])
@@ -485,7 +481,6 @@ class TestOrderMutations:
                 "action": "buy",
                 "side": "yes",
                 "count_fp": "1",
-                "type": "limit",
             }])
 
     def test_get_queue_position(self, client, market_for_orders):

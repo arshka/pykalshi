@@ -351,12 +351,12 @@ class Portfolio:
 
         Args:
             orders: List of order dicts with keys: ticker, action, side, count_fp,
-                    type, yes_price_dollars/no_price_dollars, and optional advanced params.
+                    yes_price_dollars/no_price_dollars, and optional advanced params.
 
         Example:
             orders = [
-                {"ticker": "KXBTC", "action": "buy", "side": "yes", "count_fp": "10.00", "type": "limit", "yes_price_dollars": "0.45"},
-                {"ticker": "KXBTC", "action": "buy", "side": "no", "count_fp": "10.00", "type": "limit", "no_price_dollars": "0.45"},
+                {"ticker": "KXBTC", "action": "buy", "side": "yes", "count_fp": "10.00", "yes_price_dollars": "0.45"},
+                {"ticker": "KXBTC", "action": "buy", "side": "no", "count_fp": "10.00", "no_price_dollars": "0.45"},
             ]
             results = portfolio.batch_place_orders(orders)
         """
@@ -692,7 +692,6 @@ class Portfolio:
             "action": action.value,
             "side": side.value,
             "count_fp": count_fp,
-            "type": "limit",
             "yes_price_dollars": yes_price_dollars,
         }
         if client_order_id is not None:
@@ -727,10 +726,12 @@ class Portfolio:
             convert_legacy_kwargs(o, BATCH_ORDER_LEGACY)
             if "yes_price_dollars" in o and "no_price_dollars" in o:
                 raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
-            if o.get("type", "limit") == "limit" and "yes_price_dollars" not in o and "no_price_dollars" not in o:
+            if "yes_price_dollars" not in o and "no_price_dollars" not in o:
                 raise ValueError("Limit orders require yes_price_dollars or no_price_dollars")
             if "no_price_dollars" in o:
                 o["yes_price_dollars"] = str(Decimal("1") - Decimal(o.pop("no_price_dollars")))
+            # Strip "type" — Kalshi API no longer accepts it
+            o.pop("type", None)
             prepared.append(o)
         return prepared
 
