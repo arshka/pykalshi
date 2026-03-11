@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 from .orders import Order, AsyncOrder
-from .enums import Action, Side, OrderType, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
+from .enums import Action, Side, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
 from .dataframe import DataFrameList
 from ._compat import (
     convert_legacy_kwargs,
@@ -57,8 +57,6 @@ class Portfolio:
         yes_price: int | None = None,
         no_price: int | None = None,
         buy_max_cost: int | None = None,
-        # Deprecated — Kalshi only supports limit orders
-        order_type: OrderType | None = None,
     ) -> Order:
         """Place an order on a market.
 
@@ -102,15 +100,6 @@ class Portfolio:
         if not isinstance(ticker, str):
             pls = getattr(ticker, 'price_level_structure', None)
             fte = getattr(ticker, 'fractional_trading_enabled', None)
-
-        if order_type is not None:
-            import warnings
-            warnings.warn(
-                "order_type is deprecated — Kalshi only supports limit orders. "
-                "Pass yes_price_dollars or no_price_dollars instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
 
         order_data = self._build_order_data(
             ticker, action, side, count_fp,
@@ -750,15 +739,6 @@ class AsyncPortfolio(Portfolio):
     ) -> AsyncOrder:
         # Convert deprecated legacy integer params
         convert_legacy_kwargs(kwargs, PLACE_ORDER_LEGACY)
-        order_type = kwargs.pop("order_type", None)
-        if order_type is not None:
-            import warnings
-            warnings.warn(
-                "order_type is deprecated — Kalshi only supports limit orders. "
-                "Pass yes_price_dollars or no_price_dollars instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         count_fp = count_fp or kwargs.pop("count_fp", None)
         if count_fp is None:
             raise ValueError("count_fp is required (or use deprecated 'count' param)")
