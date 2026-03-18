@@ -5,6 +5,8 @@ MVE collections/combos may not always be available on demo,
 so tests skip gracefully when there's no data.
 """
 
+from decimal import Decimal
+
 import pytest
 from pykalshi import (
     MveCollection, Event, Market,
@@ -255,7 +257,7 @@ class TestMveCreateMarket:
 
             # Try to get markets for the associated events
             legs = []
-            for ae in col.data.associated_events[:int(col.data.size_max_fp) if col.data.size_max_fp else 2]:
+            for ae in col.data.associated_events[:int(Decimal(col.data.size_max_fp)) if col.data.size_max_fp else 2]:
                 try:
                     event_markets = client.get_markets(
                         event_ticker=ae.ticker, limit=1
@@ -269,11 +271,11 @@ class TestMveCreateMarket:
                 except Exception:
                     continue
 
-            min_legs = int(col.data.size_min_fp) if col.data.size_min_fp else 2
+            min_legs = int(Decimal(col.data.size_min_fp)) if col.data.size_min_fp else 2
             if len(legs) < min_legs:
                 continue
 
-            legs = legs[:int(col.data.size_max_fp) if col.data.size_max_fp else len(legs)]
+            legs = legs[:int(Decimal(col.data.size_max_fp)) if col.data.size_max_fp else len(legs)]
 
             # Try to create the combo market
             try:

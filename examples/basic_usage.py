@@ -35,7 +35,7 @@ for pos in positions[:5]:  # Show first 5
 fills = portfolio.get_fills(limit=5)
 print(f"\nRecent fills:")
 for fill in fills:
-    print(f"  {fill.ticker}: {fill.action} {fill.count_fp}x @ ${fill.yes_price_fixed}")
+    print(f"  {fill.ticker}: {fill.action} {fill.count_fp}x @ ${fill.yes_price_dollars}")
 
 # --- Markets ---
 

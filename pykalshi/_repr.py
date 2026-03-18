@@ -359,7 +359,7 @@ def fill_html(f: FillModel) -> str:
         _row("Ticker", _ticker_link(f.ticker)),
         _row("Side", _side_pill(action, side)),
         _row("Count", _fp(f.count_fp)),
-        _row("Price", _dollars(f.yes_price_fixed)),
+        _row("Price", _dollars(f.yes_price_dollars)),
         _row("Role", role),
     ]
     return _wrap(f"<table>{''.join(rows)}</table>")

@@ -50,7 +50,7 @@ async def stream_prices():
         print("No open markets")
         return
 
-    market = max(markets, key=lambda m: m.volume_fp or "0")
+    market = max(markets, key=lambda m: float(m.volume_fp or "0"))
     print(f"Streaming {market.ticker}: {market.title}\n")
 
     async with client.feed() as feed:
