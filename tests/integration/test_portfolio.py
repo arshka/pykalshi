@@ -1,5 +1,6 @@
 """Integration tests for Portfolio endpoints."""
 
+import time
 import pytest
 from pykalshi.enums import Action, Side, OrderStatus, MarketStatus
 
@@ -369,13 +370,7 @@ class TestOrderMutations:
             assert order.order_id in order_ids
 
     def test_get_order_by_id(self, client, market_for_orders):
-        """Get a specific order by ID.
-
-        Note: The demo API sometimes returns 404 for single order lookup
-        even when the order exists. This test may be skipped on demo.
-        """
-        from pykalshi.exceptions import ResourceNotFoundError
-
+        """Get a specific order by ID."""
         market = market_for_orders
 
         order = client.portfolio.place_order(
@@ -386,17 +381,12 @@ class TestOrderMutations:
             yes_price_dollars="0.01",
         )
 
-        # Fetch by ID - may fail on demo
-        try:
-            fetched = client.portfolio.get_order(order.order_id)
-            assert fetched.order_id == order.order_id
-            assert fetched.ticker == order.ticker
-        except ResourceNotFoundError:
-            # Demo API limitation - order exists but single lookup fails
-            # Verify it exists in list instead
-            orders = client.portfolio.get_orders(limit=10)
-            order_ids = [o.order_id for o in orders]
-            assert order.order_id in order_ids
+        # Demo API needs time for single-order lookup to become consistent
+        time.sleep(0.5)
+
+        fetched = client.portfolio.get_order(order.order_id)
+        assert fetched.order_id == order.order_id
+        assert fetched.ticker == order.ticker
 
         # Cleanup
         client.portfolio.cancel_order(order.order_id)
@@ -495,7 +485,9 @@ class TestOrderMutations:
             yes_price_dollars="0.01",
         )
 
-        # Get queue position
+        # Demo API needs time for single-order lookup to become consistent
+        time.sleep(0.5)
+
         queue_pos = client.portfolio.get_queue_position(order.order_id)
 
         assert hasattr(queue_pos, "order_id")

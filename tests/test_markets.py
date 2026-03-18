@@ -371,14 +371,14 @@ class TestMarketObject:
             "market": {
                 "ticker": "TEST",
                 "rules_primary": "Test rules here",
-                "tick_size_dollars": "0.01",
+                "tick_size": 1,
             }
         })
 
         market = client.get_market("TEST")
 
         assert market.rules_primary == "Test rules here"
-        assert market.tick_size_dollars == "0.01"
+        assert market.tick_size == 1
 
 
 class TestGetEvent:

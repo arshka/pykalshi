@@ -63,13 +63,19 @@ class MarketModel(CompatModel):
     volume_24h_fp: str | None = None
     open_interest_fp: str | None = None
     liquidity_dollars: str | None = None
+    yes_bid_size_fp: str | None = None
+    yes_ask_size_fp: str | None = None
 
     # Market structure
-    tick_size_dollars: str | None = None
+    tick_size: int | None = None
     price_level_structure: str | None = None
     fractional_trading_enabled: bool | None = None
     strike_type: str | None = None
+    floor_strike: float | None = None
+    cap_strike: float | None = None
     can_close_early: bool | None = None
+    expiration_value: str | None = None
+    settlement_timer_seconds: int | None = None
     rules_primary: str | None = None
     rules_secondary: str | None = None
 
@@ -89,7 +95,7 @@ class MarketModel(CompatModel):
         "previous_yes_ask": ("previous_yes_ask_dollars", dollars_to_cents),
         "previous_price": ("previous_price_dollars", dollars_to_cents),
         "notional_value": ("notional_value_dollars", dollars_to_cents),
-        "tick_size": ("tick_size_dollars", dollars_to_cents),
+        "tick_size_dollars": ("tick_size", cents_to_dollars),
         "volume": ("volume_fp", fp_to_int),
         "volume_24h": ("volume_24h_fp", fp_to_int),
         "open_interest": ("open_interest_fp", fp_to_int),
@@ -231,7 +237,7 @@ class FillModel(CompatModel):
     is_taker: bool | None = None
     fill_id: str | None = None
     market_ticker: str | None = None
-    fee_cost_dollars: str | None = None
+    fee_cost: str | None = None
     created_time: str | None = None
     ts: int | None = None
 
@@ -239,7 +245,7 @@ class FillModel(CompatModel):
         "count": ("count_fp", fp_to_int),
         "yes_price": ("yes_price_fixed", dollars_to_cents),
         "no_price": ("no_price_fixed", dollars_to_cents),
-        "fee_cost": ("fee_cost_dollars", dollars_to_cents),
+        "fee_cost_dollars": ("fee_cost", _passthrough),
         "yes_price_dollars": ("yes_price_fixed", _passthrough),
         "no_price_dollars": ("no_price_fixed", _passthrough),
     }

@@ -71,11 +71,11 @@ def test_fill_model_fee_cost_is_dollar_string():
         "count_fp": "1.00",
         "yes_price_fixed": "0.50",
         "no_price_fixed": "0.50",
-        "fee_cost_dollars": "0.3200",
+        "fee_cost": "0.3200",
     }
     model = FillModel.model_validate(data)
-    assert model.fee_cost_dollars == "0.3200"
-    assert isinstance(model.fee_cost_dollars, str)
+    assert model.fee_cost == "0.3200"
+    assert isinstance(model.fee_cost, str)
 
 
 # --- Exchange Models ---
