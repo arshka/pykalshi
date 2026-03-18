@@ -26,13 +26,13 @@ async def browse_markets():
         positions = await client.portfolio.get_positions()
         print(f"Open positions: {len(positions)}")
         for pos in positions[:5]:
-            print(f"  {pos.ticker}: {pos.position} contracts")
+            print(f"  {pos.ticker}: {pos.position_fp} contracts")
 
         # Markets
         markets = await client.get_markets(status=MarketStatus.OPEN, limit=5)
         print(f"\n{len(markets)} open markets:")
         for market in markets:
-            print(f"  {market.ticker}: {market.yes_bid}/{market.yes_ask}¢")
+            print(f"  {market.ticker}: {market.yes_bid_dollars}/{market.yes_ask_dollars}")
 
         # Navigation — async domain objects use await
         if markets:
@@ -50,13 +50,13 @@ async def stream_prices():
         print("No open markets")
         return
 
-    market = max(markets, key=lambda m: m.volume or 0)
+    market = max(markets, key=lambda m: m.volume_fp or "0")
     print(f"Streaming {market.ticker}: {market.title}\n")
 
     async with client.feed() as feed:
         @feed.on("ticker")
         def handle(msg: TickerMessage):
-            print(f"  {msg.market_ticker}: {msg.yes_bid}/{msg.yes_ask}¢ (vol: {msg.volume})")
+            print(f"  {msg.market_ticker}: {msg.yes_bid_dollars}/{msg.yes_ask_dollars} (vol: {msg.volume_fp})")
 
         feed.subscribe("ticker", market_ticker=market.ticker)
 
@@ -84,8 +84,8 @@ async def parallel_requests():
         )
 
         for market, ob in zip(markets, orderbooks):
-            yes_levels = len(ob.orderbook.yes or [])
-            no_levels = len(ob.orderbook.no or [])
+            yes_levels = len(ob.orderbook.yes_dollars or [])
+            no_levels = len(ob.orderbook.no_dollars or [])
             print(f"{market.ticker}: {yes_levels} yes levels, {no_levels} no levels")
 
 

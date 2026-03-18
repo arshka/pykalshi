@@ -89,10 +89,6 @@ class Order:
         count_fp: str | None = None,
         yes_price_dollars: str | None = None,
         no_price_dollars: str | None = None,
-        # Deprecated legacy params
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
     ) -> Order:
         """Amend this order's price or count.
 
@@ -109,8 +105,6 @@ class Order:
             count_fp=count_fp,
             yes_price_dollars=yes_price_dollars,
             no_price_dollars=no_price_dollars,
-            count=count, yes_price=yes_price, no_price=no_price,
-            # Pass existing order data to avoid re-fetch
             ticker=self.ticker,
             action=self.action,
             side=self.side,
@@ -118,17 +112,16 @@ class Order:
         self.data = updated.data
         return self
 
-    def decrease(self, reduce_by_fp: str | None = None, *, reduce_by: int | None = None) -> Order:
+    def decrease(self, reduce_by_fp: str) -> Order:
         """Decrease the remaining count of this order.
 
         Args:
             reduce_by_fp: Number of contracts to reduce by (fixed-point string).
-            reduce_by: Deprecated. Integer count to reduce by.
 
         Returns:
             Self with updated data.
         """
-        updated = self._client.portfolio.decrease_order(self.order_id, reduce_by_fp, reduce_by=reduce_by)
+        updated = self._client.portfolio.decrease_order(self.order_id, reduce_by_fp)
         self.data = updated.data
         return self
 
@@ -207,16 +200,12 @@ class AsyncOrder(Order):
         count_fp: str | None = None,
         yes_price_dollars: str | None = None,
         no_price_dollars: str | None = None,
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
     ) -> AsyncOrder:
         updated = await self._client.portfolio.amend_order(
             self.order_id,
             count_fp=count_fp,
             yes_price_dollars=yes_price_dollars,
             no_price_dollars=no_price_dollars,
-            count=count, yes_price=yes_price, no_price=no_price,
             ticker=self.ticker,
             action=self.action,
             side=self.side,
@@ -224,8 +213,8 @@ class AsyncOrder(Order):
         self.data = updated.data
         return self
 
-    async def decrease(self, reduce_by_fp: str | None = None, *, reduce_by: int | None = None) -> AsyncOrder:  # type: ignore[override]
-        updated = await self._client.portfolio.decrease_order(self.order_id, reduce_by_fp, reduce_by=reduce_by)
+    async def decrease(self, reduce_by_fp: str) -> AsyncOrder:  # type: ignore[override]
+        updated = await self._client.portfolio.decrease_order(self.order_id, reduce_by_fp)
         self.data = updated.data
         return self
 

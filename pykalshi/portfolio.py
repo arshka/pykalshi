@@ -5,11 +5,6 @@ from urllib.parse import urlencode
 from .orders import Order, AsyncOrder
 from .enums import Action, Side, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
 from .dataframe import DataFrameList
-from ._compat import (
-    convert_legacy_kwargs,
-    PLACE_ORDER_LEGACY, AMEND_ORDER_LEGACY, DECREASE_ORDER_LEGACY,
-    BATCH_ORDER_LEGACY, ORDER_GROUP_LEGACY, TRANSFER_LEGACY,
-)
 from ._utils import normalize_ticker, normalize_tickers
 from .models import (
     OrderModel, BalanceModel, PositionModel, FillModel,
@@ -38,7 +33,7 @@ class Portfolio:
         ticker: str | Market,
         action: Action,
         side: Side,
-        count_fp: str | None = None,
+        count_fp: str,
         *,
         yes_price_dollars: str | None = None,
         no_price_dollars: str | None = None,
@@ -52,11 +47,6 @@ class Portfolio:
         order_group_id: str | None = None,
         subaccount: int | None = None,
         cancel_order_on_pause: bool | None = None,
-        # Deprecated legacy params (integer cents/counts)
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
-        buy_max_cost: int | None = None,
     ) -> Order:
         """Place an order on a market.
 
@@ -79,21 +69,6 @@ class Portfolio:
             subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
             cancel_order_on_pause: If True, cancel order if market is paused.
         """
-        # Convert deprecated legacy integer params
-        _kw: dict = {
-            "count_fp": count_fp, "yes_price_dollars": yes_price_dollars,
-            "no_price_dollars": no_price_dollars, "buy_max_cost_dollars": buy_max_cost_dollars,
-            "count": count, "yes_price": yes_price, "no_price": no_price, "buy_max_cost": buy_max_cost,
-        }
-        convert_legacy_kwargs(_kw, PLACE_ORDER_LEGACY)
-        count_fp = _kw.get("count_fp") or count_fp
-        yes_price_dollars = _kw.get("yes_price_dollars")
-        no_price_dollars = _kw.get("no_price_dollars")
-        buy_max_cost_dollars = _kw.get("buy_max_cost_dollars")
-
-        if count_fp is None:
-            raise ValueError("count_fp is required (or use deprecated 'count' param)")
-
         # Extract market structure for validation when a Market object is passed
         pls = None
         fte = None
@@ -146,10 +121,6 @@ class Portfolio:
         ticker: str | None = None,
         action: Action | None = None,
         side: Side | None = None,
-        # Deprecated legacy params
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
     ) -> Order:
         """Amend a resting order's price or count.
 
@@ -163,16 +134,6 @@ class Portfolio:
             action: Order action (fetched from order if not provided).
             side: Order side (fetched from order if not provided).
         """
-        _kw: dict = {
-            "count_fp": count_fp, "yes_price_dollars": yes_price_dollars,
-            "no_price_dollars": no_price_dollars,
-            "count": count, "yes_price": yes_price, "no_price": no_price,
-        }
-        convert_legacy_kwargs(_kw, AMEND_ORDER_LEGACY)
-        count_fp = _kw.get("count_fp")
-        yes_price_dollars = _kw.get("yes_price_dollars")
-        no_price_dollars = _kw.get("no_price_dollars")
-
         if yes_price_dollars is not None and no_price_dollars is not None:
             raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
 
@@ -208,19 +169,13 @@ class Portfolio:
         model = OrderModel.model_validate(response["order"])
         return Order(self._client, model)
 
-    def decrease_order(self, order_id: str, reduce_by_fp: str | None = None, *, reduce_by: int | None = None) -> Order:
+    def decrease_order(self, order_id: str, reduce_by_fp: str) -> Order:
         """Decrease the remaining count of a resting order.
 
         Args:
             order_id: ID of the order to decrease.
             reduce_by_fp: Number of contracts to reduce by (fixed-point string).
-            reduce_by: Deprecated. Integer count to reduce by.
         """
-        _kw: dict = {"reduce_by_fp": reduce_by_fp, "reduce_by": reduce_by}
-        convert_legacy_kwargs(_kw, DECREASE_ORDER_LEGACY)
-        reduce_by_fp = _kw.get("reduce_by_fp")
-        if reduce_by_fp is None:
-            raise ValueError("reduce_by_fp is required (or use deprecated 'reduce_by' param)")
         response = self._client.post(
             f"/portfolio/orders/{order_id}/decrease", {"reduce_by_fp": reduce_by_fp}
         )
@@ -452,27 +407,16 @@ class Portfolio:
 
     # --- Order Groups (Contract Rate Limiting) ---
 
-    def create_order_group(
-        self,
-        contracts_limit_fp: str | None = None,
-        *,
-        contracts_limit: int | None = None,
-    ) -> OrderGroupModel:
+    def create_order_group(self, contracts_limit_fp: str) -> OrderGroupModel:
         """Create an order group for rate-limiting contract matches.
 
         Args:
             contracts_limit_fp: Maximum contracts (fixed-point string) that can be
                 matched in a rolling 15-second window.
-            contracts_limit: Deprecated. Integer contracts limit.
 
         Returns:
             Created OrderGroupModel.
         """
-        _kw: dict = {"contracts_limit_fp": contracts_limit_fp, "contracts_limit": contracts_limit}
-        convert_legacy_kwargs(_kw, ORDER_GROUP_LEGACY)
-        contracts_limit_fp = _kw.get("contracts_limit_fp")
-        if contracts_limit_fp is None:
-            raise ValueError("contracts_limit_fp is required (or use deprecated 'contracts_limit' param)")
         body: dict = {"contracts_limit_fp": contracts_limit_fp}
         response = self._client.post("/portfolio/order_groups/create", body)
         return OrderGroupModel.model_validate(response)
@@ -499,25 +443,13 @@ class Portfolio:
         """Reset matched contract counter for an order group."""
         self._client.put(f"/portfolio/order_groups/{order_group_id}/reset", {})
 
-    def update_order_group_limit(
-        self,
-        order_group_id: str,
-        contracts_limit_fp: str | None = None,
-        *,
-        contracts_limit: int | None = None,
-    ) -> None:
+    def update_order_group_limit(self, order_group_id: str, contracts_limit_fp: str) -> None:
         """Update the contracts limit for an order group.
 
         Args:
             order_group_id: ID of the order group.
             contracts_limit_fp: New maximum contracts (fixed-point string).
-            contracts_limit: Deprecated. Integer contracts limit.
         """
-        _kw: dict = {"contracts_limit_fp": contracts_limit_fp, "contracts_limit": contracts_limit}
-        convert_legacy_kwargs(_kw, ORDER_GROUP_LEGACY)
-        contracts_limit_fp = _kw.get("contracts_limit_fp")
-        if contracts_limit_fp is None:
-            raise ValueError("contracts_limit_fp is required (or use deprecated 'contracts_limit' param)")
         body: dict = {"contracts_limit_fp": contracts_limit_fp}
         self._client.put(f"/portfolio/order_groups/{order_group_id}/limit", body)
 
@@ -532,9 +464,7 @@ class Portfolio:
         self,
         from_subaccount_id: str,
         to_subaccount_id: str,
-        amount_dollars: str | None = None,
-        *,
-        amount: int | None = None,
+        amount_dollars: str,
     ) -> SubaccountTransferModel:
         """Transfer funds between subaccounts.
 
@@ -542,13 +472,7 @@ class Portfolio:
             from_subaccount_id: Source subaccount ID.
             to_subaccount_id: Destination subaccount ID.
             amount_dollars: Amount to transfer (dollar string).
-            amount: Deprecated. Amount in cents.
         """
-        _kw: dict = {"amount_dollars": amount_dollars, "amount": amount}
-        convert_legacy_kwargs(_kw, TRANSFER_LEGACY)
-        amount_dollars = _kw.get("amount_dollars")
-        if amount_dollars is None:
-            raise ValueError("amount_dollars is required (or use deprecated 'amount' param)")
         body = {
             "from_subaccount_id": from_subaccount_id,
             "to_subaccount_id": to_subaccount_id,
@@ -708,8 +632,7 @@ class Portfolio:
         prepared = []
         for order in orders:
             o = dict(order)
-            # Convert legacy integer keys
-            convert_legacy_kwargs(o, BATCH_ORDER_LEGACY)
+
             if "yes_price_dollars" in o and "no_price_dollars" in o:
                 raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
             if "yes_price_dollars" not in o and "no_price_dollars" not in o:
@@ -737,11 +660,6 @@ class AsyncPortfolio(Portfolio):
         count_fp: str | None = None,
         **kwargs,
     ) -> AsyncOrder:
-        # Convert deprecated legacy integer params
-        convert_legacy_kwargs(kwargs, PLACE_ORDER_LEGACY)
-        count_fp = count_fp or kwargs.pop("count_fp", None)
-        if count_fp is None:
-            raise ValueError("count_fp is required (or use deprecated 'count' param)")
         order_data = self._build_order_data(
             ticker, action, side, count_fp, **kwargs
         )
@@ -768,20 +686,7 @@ class AsyncPortfolio(Portfolio):
         ticker: str | None = None,
         action: Action | None = None,
         side: Side | None = None,
-        count: int | None = None,
-        yes_price: int | None = None,
-        no_price: int | None = None,
     ) -> AsyncOrder:
-        _kw: dict = {
-            "count_fp": count_fp, "yes_price_dollars": yes_price_dollars,
-            "no_price_dollars": no_price_dollars,
-            "count": count, "yes_price": yes_price, "no_price": no_price,
-        }
-        convert_legacy_kwargs(_kw, AMEND_ORDER_LEGACY)
-        count_fp = _kw.get("count_fp")
-        yes_price_dollars = _kw.get("yes_price_dollars")
-        no_price_dollars = _kw.get("no_price_dollars")
-
         if yes_price_dollars is not None and no_price_dollars is not None:
             raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
         if no_price_dollars is not None:
@@ -813,12 +718,7 @@ class AsyncPortfolio(Portfolio):
         model = OrderModel.model_validate(response["order"])
         return AsyncOrder(self._client, model)
 
-    async def decrease_order(self, order_id: str, reduce_by_fp: str | None = None, *, reduce_by: int | None = None) -> AsyncOrder:  # type: ignore[override]
-        _kw: dict = {"reduce_by_fp": reduce_by_fp, "reduce_by": reduce_by}
-        convert_legacy_kwargs(_kw, DECREASE_ORDER_LEGACY)
-        reduce_by_fp = _kw.get("reduce_by_fp")
-        if reduce_by_fp is None:
-            raise ValueError("reduce_by_fp is required (or use deprecated 'reduce_by' param)")
+    async def decrease_order(self, order_id: str, reduce_by_fp: str) -> AsyncOrder:  # type: ignore[override]
         response = await self._client.post(
             f"/portfolio/orders/{order_id}/decrease", {"reduce_by_fp": reduce_by_fp}
         )
@@ -921,12 +821,7 @@ class AsyncPortfolio(Portfolio):
         response = await self._client.get("/portfolio/summary/total_resting_order_value")
         return response.get("total_resting_order_value_dollars", "0")
 
-    async def create_order_group(self, contracts_limit_fp: str | None = None, *, contracts_limit: int | None = None) -> OrderGroupModel:  # type: ignore[override]
-        _kw: dict = {"contracts_limit_fp": contracts_limit_fp, "contracts_limit": contracts_limit}
-        convert_legacy_kwargs(_kw, ORDER_GROUP_LEGACY)
-        contracts_limit_fp = _kw.get("contracts_limit_fp")
-        if contracts_limit_fp is None:
-            raise ValueError("contracts_limit_fp is required (or use deprecated 'contracts_limit' param)")
+    async def create_order_group(self, contracts_limit_fp: str) -> OrderGroupModel:  # type: ignore[override]
         response = await self._client.post("/portfolio/order_groups/create", {"contracts_limit_fp": contracts_limit_fp})
         return OrderGroupModel.model_validate(response)
 
@@ -945,24 +840,14 @@ class AsyncPortfolio(Portfolio):
     async def reset_order_group(self, order_group_id: str) -> None:  # type: ignore[override]
         await self._client.put(f"/portfolio/order_groups/{order_group_id}/reset", {})
 
-    async def update_order_group_limit(self, order_group_id: str, contracts_limit_fp: str | None = None, *, contracts_limit: int | None = None) -> None:  # type: ignore[override]
-        _kw: dict = {"contracts_limit_fp": contracts_limit_fp, "contracts_limit": contracts_limit}
-        convert_legacy_kwargs(_kw, ORDER_GROUP_LEGACY)
-        contracts_limit_fp = _kw.get("contracts_limit_fp")
-        if contracts_limit_fp is None:
-            raise ValueError("contracts_limit_fp is required (or use deprecated 'contracts_limit' param)")
+    async def update_order_group_limit(self, order_group_id: str, contracts_limit_fp: str) -> None:  # type: ignore[override]
         await self._client.put(f"/portfolio/order_groups/{order_group_id}/limit", {"contracts_limit_fp": contracts_limit_fp})
 
     async def create_subaccount(self) -> SubaccountModel:  # type: ignore[override]
         response = await self._client.post("/portfolio/subaccounts", {})
         return SubaccountModel.model_validate(response.get("subaccount", response))
 
-    async def transfer_between_subaccounts(self, from_subaccount_id, to_subaccount_id, amount_dollars=None, *, amount: int | None = None) -> SubaccountTransferModel:  # type: ignore[override]
-        _kw: dict = {"amount_dollars": amount_dollars, "amount": amount}
-        convert_legacy_kwargs(_kw, TRANSFER_LEGACY)
-        amount_dollars = _kw.get("amount_dollars")
-        if amount_dollars is None:
-            raise ValueError("amount_dollars is required (or use deprecated 'amount' param)")
+    async def transfer_between_subaccounts(self, from_subaccount_id: str, to_subaccount_id: str, amount_dollars: str) -> SubaccountTransferModel:  # type: ignore[override]
         body = {"from_subaccount_id": from_subaccount_id, "to_subaccount_id": to_subaccount_id, "amount_dollars": amount_dollars}
         response = await self._client.post("/portfolio/subaccounts/transfer", body)
         return SubaccountTransferModel.model_validate(response.get("transfer", response))
