@@ -1,7 +1,36 @@
 """Integration tests for Portfolio endpoints."""
 
+import time
 import pytest
 from pykalshi.enums import Action, Side, OrderStatus, MarketStatus
+from pykalshi.exceptions import ResourceNotFoundError
+
+
+def _eventually_fetch(
+    fetch,
+    *,
+    predicate=lambda result: True,
+    timeout: float = 3.0,
+    interval: float = 0.25,
+    ignored_exceptions: tuple[type[Exception], ...] = (),
+):
+    """Retry a read until it succeeds and satisfies the predicate."""
+    deadline = time.time() + timeout
+    last_error = None
+
+    while time.time() < deadline:
+        try:
+            result = fetch()
+        except ignored_exceptions as exc:
+            last_error = exc
+        else:
+            if predicate(result):
+                return result
+        time.sleep(interval)
+
+    if last_error is not None:
+        raise last_error
+    raise AssertionError("Timed out waiting for eventually consistent portfolio state")
 
 
 class TestPortfolioReadOnly:
@@ -111,10 +140,16 @@ class TestOrderGroups:
                 order_group_id=group_id,
             )
 
-            # Get order group - should show orders
-            import time
-            time.sleep(0.5)  # Allow time for orders to register
-            fetched = client.portfolio.get_order_group(group_id)
+            # Order-group membership can lag briefly on demo.
+            fetched = _eventually_fetch(
+                lambda: client.portfolio.get_order_group(group_id),
+                predicate=lambda group: (
+                    group.orders is not None
+                    and len(group.orders) == 2
+                    and order1.order_id in group.orders
+                    and order2.order_id in group.orders
+                ),
+            )
             assert fetched.orders is not None
             assert len(fetched.orders) == 2
             assert order1.order_id in fetched.orders
@@ -123,9 +158,10 @@ class TestOrderGroups:
             # Update limit
             client.portfolio.update_order_group_limit(group_id, contracts_limit=200)
 
-            # Verify update (allow time for change to propagate)
-            time.sleep(0.5)
-            updated = client.portfolio.get_order_group(group_id)
+            updated = _eventually_fetch(
+                lambda: client.portfolio.get_order_group(group_id),
+                predicate=lambda group: group.contracts_limit_fp is not None,
+            )
             assert updated.contracts_limit_fp is not None
 
             # Trigger the group (cancels all orders)
@@ -317,8 +353,6 @@ class TestOrderMutations:
         Note: The demo API's single order lookup may return 404.
         This test verifies the refresh method works when the API is available.
         """
-        from pykalshi.exceptions import ResourceNotFoundError
-
         market = market_for_orders
 
         order = client.portfolio.place_order(
@@ -369,13 +403,7 @@ class TestOrderMutations:
             assert order.order_id in order_ids
 
     def test_get_order_by_id(self, client, market_for_orders):
-        """Get a specific order by ID.
-
-        Note: The demo API sometimes returns 404 for single order lookup
-        even when the order exists. This test may be skipped on demo.
-        """
-        from pykalshi.exceptions import ResourceNotFoundError
-
+        """Get a specific order by ID."""
         market = market_for_orders
 
         order = client.portfolio.place_order(
@@ -386,17 +414,12 @@ class TestOrderMutations:
             yes_price_dollars="0.01",
         )
 
-        # Fetch by ID - may fail on demo
-        try:
-            fetched = client.portfolio.get_order(order.order_id)
-            assert fetched.order_id == order.order_id
-            assert fetched.ticker == order.ticker
-        except ResourceNotFoundError:
-            # Demo API limitation - order exists but single lookup fails
-            # Verify it exists in list instead
-            orders = client.portfolio.get_orders(limit=10)
-            order_ids = [o.order_id for o in orders]
-            assert order.order_id in order_ids
+        fetched = _eventually_fetch(
+            lambda: client.portfolio.get_order(order.order_id),
+            ignored_exceptions=(ResourceNotFoundError,),
+        )
+        assert fetched.order_id == order.order_id
+        assert fetched.ticker == order.ticker
 
         # Cleanup
         client.portfolio.cancel_order(order.order_id)
@@ -495,8 +518,10 @@ class TestOrderMutations:
             yes_price_dollars="0.01",
         )
 
-        # Get queue position
-        queue_pos = client.portfolio.get_queue_position(order.order_id)
+        queue_pos = _eventually_fetch(
+            lambda: client.portfolio.get_queue_position(order.order_id),
+            ignored_exceptions=(ResourceNotFoundError,),
+        )
 
         assert hasattr(queue_pos, "order_id")
         assert hasattr(queue_pos, "queue_position_fp")
@@ -527,9 +552,6 @@ class TestOrderMutations:
         order_ids = [o.order_id for o in orders]
 
         try:
-            import time
-            time.sleep(0.5)  # Allow time for orders to register
-
             # Get queue positions filtered by market ticker
             queue_positions = client.portfolio.get_queue_positions(
                 market_tickers=[market.ticker]

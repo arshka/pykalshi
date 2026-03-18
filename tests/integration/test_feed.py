@@ -36,14 +36,12 @@ class TestFeedConnection:
         feed.start()
         assert feed.is_connected
 
-        # Wait for messages (orderbook snapshot usually arrives immediately)
+        # Wait for subscription acks and messages
         time.sleep(3)
 
-        feed.stop()
+        assert len(feed._sids) > 0, "Subscriptions were not acknowledged"
 
-        # Should have received at least the initial orderbook snapshot
-        # (dispatched as orderbook_delta)
-        assert len(messages) >= 0  # May not get messages if market is quiet
+        feed.stop()
 
     def test_unsubscribe(self, client, active_market):
         """Unsubscribe removes subscription."""
@@ -54,6 +52,14 @@ class TestFeedConnection:
 
         feed.unsubscribe("ticker", market_tickers=[active_market.ticker])
         assert len(feed._active_subs) == 0
+
+    def test_duplicate_subscribe_deduplicates(self, client, active_market):
+        """Subscribing to the same channel+ticker twice doesn't create duplicates."""
+        feed = client.feed()
+
+        feed.subscribe("ticker", market_tickers=[active_market.ticker])
+        feed.subscribe("ticker", market_tickers=[active_market.ticker])
+        assert len(feed._active_subs) == 1
 
     def test_multiple_subscriptions(self, client):
         """Multiple subscriptions tracked correctly."""
@@ -143,42 +149,25 @@ class TestFeedConnection:
         assert not feed.is_connected
 
     def test_trade_channel(self, client, active_market):
-        """Subscribe to trade channel (public)."""
+        """Subscribe to trade channel — verify subscription is accepted."""
         feed = client.feed()
-        messages = []
-
-        @feed.on("trade")
-        def on_trade(msg):
-            messages.append(msg)
 
         feed.subscribe("trade", market_tickers=[active_market.ticker])
         feed.start()
-
-        # Trades are infrequent, just verify subscription works
         time.sleep(2)
 
-        feed.stop()
+        assert len(feed._sids) > 0, "Trade subscription was not acknowledged"
 
-        # Trade channel subscription should have been accepted
-        # (messages may be empty if no trades occurred)
-        assert isinstance(messages, list)
+        feed.stop()
 
     def test_market_lifecycle_channel(self, client, active_market):
-        """Subscribe to market_lifecycle channel (public)."""
+        """Subscribe to market_lifecycle_v2 channel — verify subscription is accepted."""
         feed = client.feed()
-        messages = []
 
-        @feed.on("market_lifecycle")
-        def on_lifecycle(msg):
-            messages.append(msg)
-
-        feed.subscribe("market_lifecycle", market_tickers=[active_market.ticker])
+        feed.subscribe("market_lifecycle_v2", market_tickers=[active_market.ticker])
         feed.start()
-
-        # Lifecycle events are rare, just verify subscription works
         time.sleep(2)
 
-        feed.stop()
+        assert len(feed._sids) > 0, "market_lifecycle_v2 subscription was not acknowledged"
 
-        # Subscription should have been accepted
-        assert isinstance(messages, list)
+        feed.stop()

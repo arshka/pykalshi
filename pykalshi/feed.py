@@ -208,7 +208,7 @@ _MESSAGE_MODELS: dict[str, type[BaseModel]] = {
     "trade": TradeMessage,
     "fill": FillMessage,
     "market_position": PositionMessage,
-    "market_lifecycle": MarketLifecycleMessage,
+    "market_lifecycle_v2": MarketLifecycleMessage,
     "order_group_update": OrderGroupUpdateMessage,
 }
 
@@ -220,7 +220,7 @@ _TYPE_TO_CHANNEL: dict[str, str] = {
     "trade": "trade",
     "fill": "fill",
     "market_position": "market_positions",
-    "market_lifecycle": "market_lifecycle",
+    "market_lifecycle_v2": "market_lifecycle_v2",
     "order_group_update": "order_group_updates",
 }
 
@@ -295,7 +295,7 @@ class Feed:
         - "orderbook_delta": Orderbook snapshots and deltas (requires auth)
         - "fill": Your order fills (requires auth, no market filter)
         - "market_positions": Real-time position updates with P&L (requires auth, no market filter)
-        - "market_lifecycle": Market state changes (public)
+        - "market_lifecycle_v2": Market state changes (public)
         - "order_group_updates": Order group lifecycle changes (requires auth)
     """
 
@@ -351,7 +351,8 @@ class Feed:
             params["market_tickers"] = normalize_tickers(market_tickers)
 
         with self._lock:
-            self._active_subs.append(params)
+            if params not in self._active_subs:
+                self._active_subs.append(params)
 
         if self._loop and self._connected.is_set():
             asyncio.run_coroutine_threadsafe(

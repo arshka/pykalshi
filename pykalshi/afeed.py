@@ -41,7 +41,7 @@ class AsyncFeed:
 
     Supports the same channels as Feed:
         ticker, trade, orderbook_delta, fill, market_positions,
-        market_lifecycle, order_group_updates
+        market_lifecycle_v2, order_group_updates
 
     Handlers may be sync or async — async handlers are awaited.
     """
@@ -93,7 +93,8 @@ class AsyncFeed:
             params["market_ticker"] = market_ticker.upper()
         if market_tickers is not None:
             params["market_tickers"] = normalize_tickers(market_tickers)
-        self._active_subs.append(params)
+        if params not in self._active_subs:
+            self._active_subs.append(params)
 
     def unsubscribe(
         self,
