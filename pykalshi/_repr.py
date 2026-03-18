@@ -158,16 +158,16 @@ def _cents_display(v: int | None) -> str:
     """Format cents integer as dollar display."""
     if v is None:
         return "—"
-    from ._compat import cents_to_dollars
-    return f"${cents_to_dollars(v)}"
+    from decimal import Decimal
+    return f'${(Decimal(v) / 100).quantize(Decimal("0.01"))}'
 
 
 def _pnl_cents(v: int) -> str:
     """Format P&L in cents with color."""
-    from ._compat import cents_to_dollars
+    from decimal import Decimal
     cls = "g" if v >= 0 else "r"
     sign = "+" if v > 0 else ""
-    return f'<span class="{cls}">{sign}${cents_to_dollars(v)}</span>'
+    return f'<span class="{cls}">{sign}${(Decimal(v) / 100).quantize(Decimal("0.01"))}</span>'
 
 
 def _row(label: str, value: str, mono: bool = False) -> str:
@@ -359,7 +359,7 @@ def fill_html(f: FillModel) -> str:
         _row("Ticker", _ticker_link(f.ticker)),
         _row("Side", _side_pill(action, side)),
         _row("Count", _fp(f.count_fp)),
-        _row("Price", _dollars(f.yes_price_fixed)),
+        _row("Price", _dollars(f.yes_price_dollars)),
         _row("Role", role),
     ]
     return _wrap(f"<table>{''.join(rows)}</table>")

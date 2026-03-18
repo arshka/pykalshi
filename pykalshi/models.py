@@ -1,27 +1,22 @@
 from __future__ import annotations
 from decimal import Decimal
 from functools import cached_property
-from typing import ClassVar, Callable
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from .enums import OrderStatus, Side, Action, OrderType, MarketStatus
-from ._compat import CompatModel, dollars_to_cents, fp_to_int, orderbook_to_legacy, cents_to_dollars, _passthrough
 
 
-class MveSelectedLeg(CompatModel):
+class MveSelectedLeg(BaseModel):
     """A single leg in a multivariate event combo."""
     event_ticker: str
     market_ticker: str
     side: str  # "yes" or "no"
     yes_settlement_value_dollars: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "yes_settlement_value": ("yes_settlement_value_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
 
-class MarketModel(CompatModel):
+class MarketModel(BaseModel):
     """Pydantic model for Market data."""
 
     ticker: str
@@ -84,24 +79,6 @@ class MarketModel(CompatModel):
     mve_selected_legs: list[MveSelectedLeg] | None = None
     is_provisional: bool | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "settlement_value": ("settlement_value_dollars", dollars_to_cents),
-        "yes_bid": ("yes_bid_dollars", dollars_to_cents),
-        "yes_ask": ("yes_ask_dollars", dollars_to_cents),
-        "no_bid": ("no_bid_dollars", dollars_to_cents),
-        "no_ask": ("no_ask_dollars", dollars_to_cents),
-        "last_price": ("last_price_dollars", dollars_to_cents),
-        "previous_yes_bid": ("previous_yes_bid_dollars", dollars_to_cents),
-        "previous_yes_ask": ("previous_yes_ask_dollars", dollars_to_cents),
-        "previous_price": ("previous_price_dollars", dollars_to_cents),
-        "notional_value": ("notional_value_dollars", dollars_to_cents),
-        "tick_size_dollars": ("tick_size", cents_to_dollars),
-        "volume": ("volume_fp", fp_to_int),
-        "volume_24h": ("volume_24h_fp", fp_to_int),
-        "open_interest": ("open_interest_fp", fp_to_int),
-        "liquidity": ("liquidity_dollars", dollars_to_cents),
-        "liquidity_fp": ("liquidity_dollars", _passthrough),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
@@ -129,7 +106,7 @@ class EventModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class OrderModel(CompatModel):
+class OrderModel(BaseModel):
     """Pydantic model for Order data."""
 
     order_id: str
@@ -161,32 +138,17 @@ class OrderModel(CompatModel):
     last_update_time: str | None = None
     expiration_time: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "yes_price": ("yes_price_dollars", dollars_to_cents),
-        "no_price": ("no_price_dollars", dollars_to_cents),
-        "initial_count": ("initial_count_fp", fp_to_int),
-        "fill_count": ("fill_count_fp", fp_to_int),
-        "remaining_count": ("remaining_count_fp", fp_to_int),
-        "taker_fees": ("taker_fees_dollars", dollars_to_cents),
-        "maker_fees": ("maker_fees_dollars", dollars_to_cents),
-        "taker_fill_cost": ("taker_fill_cost_dollars", dollars_to_cents),
-        "maker_fill_cost": ("maker_fill_cost_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
 
-class BalanceModel(CompatModel):
+class BalanceModel(BaseModel):
     """Pydantic model for Balance data. Values are cents integers."""
 
     balance: int
     portfolio_value: int
     updated_ts: int | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "balance_dollars": ("balance", cents_to_dollars),
-        "portfolio_value_dollars": ("portfolio_value", cents_to_dollars),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
@@ -195,7 +157,7 @@ class BalanceModel(CompatModel):
         return balance_html(self)
 
 
-class PositionModel(CompatModel):
+class PositionModel(BaseModel):
     """Pydantic model for a portfolio position."""
 
     ticker: str
@@ -207,14 +169,6 @@ class PositionModel(CompatModel):
     realized_pnl_dollars: str | None = None
     last_updated_ts: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "position": ("position_fp", fp_to_int),
-        "total_traded": ("total_traded_dollars", dollars_to_cents),
-        "total_traded_fp": ("total_traded_dollars", _passthrough),
-        "market_exposure": ("market_exposure_dollars", dollars_to_cents),
-        "fees_paid": ("fees_paid_dollars", dollars_to_cents),
-        "realized_pnl": ("realized_pnl_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
@@ -223,7 +177,7 @@ class PositionModel(CompatModel):
         return position_html(self)
 
 
-class FillModel(CompatModel):
+class FillModel(BaseModel):
     """Pydantic model for a trade fill/execution."""
 
     trade_id: str
@@ -232,32 +186,24 @@ class FillModel(CompatModel):
     side: Side
     action: Action
     count_fp: str
-    yes_price_fixed: str
-    no_price_fixed: str
+    yes_price_dollars: str = Field(validation_alias=AliasChoices('yes_price_dollars', 'yes_price_fixed'))
+    no_price_dollars: str = Field(validation_alias=AliasChoices('no_price_dollars', 'no_price_fixed'))
     is_taker: bool | None = None
     fill_id: str | None = None
     market_ticker: str | None = None
-    fee_cost: str | None = None
+    fee_cost_dollars: str | None = Field(default=None, validation_alias=AliasChoices('fee_cost_dollars', 'fee_cost'))
     created_time: str | None = None
     ts: int | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "count": ("count_fp", fp_to_int),
-        "yes_price": ("yes_price_fixed", dollars_to_cents),
-        "no_price": ("no_price_fixed", dollars_to_cents),
-        "fee_cost_dollars": ("fee_cost", _passthrough),
-        "yes_price_dollars": ("yes_price_fixed", _passthrough),
-        "no_price_dollars": ("no_price_fixed", _passthrough),
-    }
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     def _repr_html_(self) -> str:
         from ._repr import fill_html
         return fill_html(self)
 
 
-class OHLCData(CompatModel):
+class OHLCData(BaseModel):
     """OHLC price data (dollar strings)."""
 
     open_dollars: str | None = None
@@ -265,17 +211,11 @@ class OHLCData(CompatModel):
     low_dollars: str | None = None
     close_dollars: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "open": ("open_dollars", dollars_to_cents),
-        "high": ("high_dollars", dollars_to_cents),
-        "low": ("low_dollars", dollars_to_cents),
-        "close": ("close_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
 
-class PriceData(CompatModel):
+class PriceData(BaseModel):
     """Price data with additional fields (dollar strings)."""
 
     open_dollars: str | None = None
@@ -287,21 +227,11 @@ class PriceData(CompatModel):
     mean_dollars: str | None = None
     previous_dollars: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "open": ("open_dollars", dollars_to_cents),
-        "high": ("high_dollars", dollars_to_cents),
-        "low": ("low_dollars", dollars_to_cents),
-        "close": ("close_dollars", dollars_to_cents),
-        "max": ("max_dollars", dollars_to_cents),
-        "min": ("min_dollars", dollars_to_cents),
-        "mean": ("mean_dollars", dollars_to_cents),
-        "previous": ("previous_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
 
-class Candlestick(CompatModel):
+class Candlestick(BaseModel):
     """Pydantic model for a single Candlestick."""
 
     end_period_ts: int
@@ -311,10 +241,6 @@ class Candlestick(CompatModel):
     yes_bid: OHLCData | None = None
     yes_ask: OHLCData | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "volume": ("volume_fp", fp_to_int),
-        "open_interest": ("open_interest_fp", fp_to_int),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
@@ -342,16 +268,12 @@ class CandlestickResponse(BaseModel):
 
 
 # Orderbook Models
-class Orderbook(CompatModel):
+class Orderbook(BaseModel):
     """Orderbook with yes/no price levels (dollar strings)."""
 
-    yes_dollars: list[tuple[str, str | int]] | None = None  # [(price_dollars, quantity_fp), ...]
-    no_dollars: list[tuple[str, str | int]] | None = None
+    yes_dollars: list[tuple[str, str]] | None = None  # [(price_dollars, quantity_fp), ...]
+    no_dollars: list[tuple[str, str]] | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "yes": ("yes_dollars", orderbook_to_legacy),
-        "no": ("no_dollars", orderbook_to_legacy),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
@@ -579,7 +501,7 @@ class SeriesModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class TradeModel(CompatModel):
+class TradeModel(BaseModel):
     """Public trade execution record."""
     trade_id: str
     ticker: str
@@ -590,11 +512,6 @@ class TradeModel(CompatModel):
     created_time: str | None = None
     ts: int | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "count": ("count_fp", fp_to_int),
-        "yes_price": ("yes_price_dollars", dollars_to_cents),
-        "no_price": ("no_price_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
@@ -603,7 +520,7 @@ class TradeModel(CompatModel):
         return trade_html(self)
 
 
-class SettlementModel(CompatModel):
+class SettlementModel(BaseModel):
     """Settlement record for a resolved position."""
     ticker: str
     event_ticker: str | None = None
@@ -617,15 +534,6 @@ class SettlementModel(CompatModel):
     fee_cost: str | None = None  # FixedPointDollars string (e.g. "0.3200")
     settled_time: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "yes_count": ("yes_count_fp", fp_to_int),
-        "no_count": ("no_count_fp", fp_to_int),
-        "yes_total_cost_dollars": ("yes_total_cost", cents_to_dollars),
-        "no_total_cost_dollars": ("no_total_cost", cents_to_dollars),
-        "revenue_dollars": ("revenue", cents_to_dollars),
-        "value_dollars": ("value", cents_to_dollars),
-        "fee_cost_dollars": ("fee_cost", _passthrough),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
@@ -637,7 +545,7 @@ class SettlementModel(CompatModel):
     @property
     def pnl(self) -> int:
         """Net P&L in cents (revenue - costs - fees)."""
-        fee_cents = round(float(self.fee_cost or 0) * 100)
+        fee_cents = int(Decimal(self.fee_cost or "0") * 100)
         return self.revenue - self.yes_total_cost - self.no_total_cost - fee_cents
 
     def _repr_html_(self) -> str:
@@ -645,21 +553,18 @@ class SettlementModel(CompatModel):
         return settlement_html(self)
 
 
-class QueuePositionModel(CompatModel):
+class QueuePositionModel(BaseModel):
     """Order's position in the queue at its price level."""
     order_id: str
     queue_position_fp: str  # 0-indexed, fixed-point string (e.g. "0.00")
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "queue_position": ("queue_position_fp", fp_to_int),
-    }
 
     def _repr_html_(self) -> str:
         from ._repr import queue_position_html
         return queue_position_html(self)
 
 
-class OrderGroupModel(CompatModel):
+class OrderGroupModel(BaseModel):
     """Order group for rate-limiting contract matches.
 
     Order groups limit total contracts matched across all orders in the group
@@ -673,9 +578,6 @@ class OrderGroupModel(CompatModel):
     # Only returned from get_order_group (not list)
     orders: list[str] | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "contracts_limit": ("contracts_limit_fp", fp_to_int),
-    }
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -695,21 +597,17 @@ class SubaccountModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class SubaccountBalanceModel(CompatModel):
+class SubaccountBalanceModel(BaseModel):
     """Balance for a single subaccount."""
     subaccount_id: str
     balance_dollars: str
     portfolio_value_dollars: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "balance": ("balance_dollars", dollars_to_cents),
-        "portfolio_value": ("portfolio_value_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
 
-class SubaccountTransferModel(CompatModel):
+class SubaccountTransferModel(BaseModel):
     """Record of a transfer between subaccounts."""
     transfer_id: str
     from_subaccount_id: str
@@ -717,21 +615,15 @@ class SubaccountTransferModel(CompatModel):
     amount_dollars: str
     created_time: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "amount": ("amount_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
 
-class ForecastPoint(CompatModel):
+class ForecastPoint(BaseModel):
     """A single point in forecast percentile history."""
     ts: int  # Unix timestamp
     value_dollars: str  # Forecast value as dollar string
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "value": ("value_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
@@ -746,7 +638,7 @@ class ForecastPercentileHistory(BaseModel):
 
 # --- Multivariate Event Collection Models ---
 
-class AssociatedEventModel(CompatModel):
+class AssociatedEventModel(BaseModel):
     """An event available as a leg in a multivariate event collection."""
     ticker: str
     is_yes_only: bool = False
@@ -754,15 +646,11 @@ class AssociatedEventModel(CompatModel):
     size_max_fp: str | None = None
     active_quoters: list[str] | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "size_min": ("size_min_fp", fp_to_int),
-        "size_max": ("size_max_fp", fp_to_int),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
 
-class MveCollectionModel(CompatModel):
+class MveCollectionModel(BaseModel):
     """Pydantic model for a multivariate event collection (combo container)."""
     collection_ticker: str
     series_ticker: str | None = None
@@ -776,17 +664,13 @@ class MveCollectionModel(CompatModel):
     size_max_fp: str | None = None
     functional_description: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "size_min": ("size_min_fp", fp_to_int),
-        "size_max": ("size_max_fp", fp_to_int),
-    }
 
     model_config = ConfigDict(extra="ignore")
 
 
 # --- Communications Models (RFQ / Quotes) ---
 
-class RfqModel(CompatModel):
+class RfqModel(BaseModel):
     """Request for Quote on a multivariate event combo."""
     rfq_id: str = Field(validation_alias=AliasChoices('rfq_id', 'id'))
     market_ticker: str | None = None
@@ -800,15 +684,11 @@ class RfqModel(CompatModel):
     expiration_time: str | None = None
     creator_id: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "contracts": ("contracts_fp", fp_to_int),
-        "target_cost": ("target_cost_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
 
-class QuoteModel(CompatModel):
+class QuoteModel(BaseModel):
     """A quote in response to an RFQ."""
     quote_id: str = Field(validation_alias=AliasChoices('quote_id', 'id'))
     rfq_id: str | None = None
@@ -821,9 +701,5 @@ class QuoteModel(CompatModel):
     expiration_time: str | None = None
     creator_id: str | None = None
 
-    _legacy_fields: ClassVar[dict[str, tuple[str, Callable]]] = {
-        "yes_bid": ("yes_bid_dollars", dollars_to_cents),
-        "no_bid": ("no_bid_dollars", dollars_to_cents),
-    }
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)

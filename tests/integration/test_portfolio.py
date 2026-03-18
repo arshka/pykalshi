@@ -40,9 +40,8 @@ class TestPortfolioReadOnly:
         """Get account balance."""
         balance = client.portfolio.get_balance()
 
-        assert hasattr(balance, "balance_dollars")
-        assert hasattr(balance, "portfolio_value_dollars")
-        assert isinstance(balance.balance_dollars, str)
+        assert isinstance(balance.balance, int)
+        assert isinstance(balance.portfolio_value, int)
 
     def test_get_positions(self, client):
         """Get positions list."""
@@ -116,7 +115,7 @@ class TestOrderGroups:
             pytest.skip("No open markets available")
 
         # Create order group with contracts limit
-        group = client.portfolio.create_order_group(contracts_limit=100)
+        group = client.portfolio.create_order_group(contracts_limit_fp="100")
 
         assert group.id is not None
         group_id = group.id
@@ -156,7 +155,7 @@ class TestOrderGroups:
             assert order2.order_id in fetched.orders
 
             # Update limit
-            client.portfolio.update_order_group_limit(group_id, contracts_limit=200)
+            client.portfolio.update_order_group_limit(group_id, contracts_limit_fp="200")
 
             updated = _eventually_fetch(
                 lambda: client.portfolio.get_order_group(group_id),

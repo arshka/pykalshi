@@ -33,7 +33,7 @@ from pykalshi.exceptions import (
     ResourceNotFoundError,
     RateLimitError,
 )
-from pykalshi._compat import cents_to_dollars
+from decimal import Decimal
 
 load_dotenv()
 
@@ -287,8 +287,8 @@ def get_portfolio_summary():
             pass
 
     return {
-        "balance_dollars": cents_to_dollars(balance.balance),
-        "portfolio_value_dollars": cents_to_dollars(balance.portfolio_value),
+        "balance_dollars": str((Decimal(balance.balance) / 100).quantize(Decimal("0.01"))),
+        "portfolio_value_dollars": str((Decimal(balance.portfolio_value) / 100).quantize(Decimal("0.01"))),
         "position_count": len(positions),
         "total_exposure_dollars": str(total_exposure),
         "position_market_value_dollars": str(position_market_value),
@@ -331,7 +331,7 @@ def get_portfolio_history(days: int = 30, resolution: Optional[str] = None):
         # Settlement P&L = revenue - costs - fees (costs/revenue in cents, fee in dollar string)
         fee_cents = round(float(settlement.fee_cost or 0) * 100)
         delta_cents = settlement.revenue - settlement.yes_total_cost - settlement.no_total_cost - fee_cents
-        events.append({'ts': ts, 'delta': cents_to_dollars(delta_cents), 'type': 'settlement'})
+        events.append({'ts': ts, 'delta': str((Decimal(delta_cents) / 100).quantize(Decimal("0.01"))), 'type': 'settlement'})
 
     if not events:
         return []
