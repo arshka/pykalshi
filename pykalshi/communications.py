@@ -22,7 +22,7 @@ class Communications:
         # Create an RFQ for a combo market
         rfq = client.communications.create_rfq(
             market_ticker="KXMVE-...",
-            contracts=10,
+            contracts_fp="10.00",
         )
 
         # List active RFQs
