@@ -75,8 +75,8 @@ Issues = "https://github.com/ArshKA/pykalshi/issues"
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["pykalshi"]
+[tool.setuptools.packages.find]
+include = ["pykalshi*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
