@@ -1,6 +1,6 @@
 [project]
 name = "pykalshi"
-version = "0.4.0"
+version = "0.5.0"
 description = "A typed Python client for the Kalshi prediction markets API with WebSocket streaming, automatic retries, and ergonomic interfaces"
 readme = "README.md"
 license = "MIT"
@@ -75,8 +75,8 @@ Issues = "https://github.com/ArshKA/pykalshi/issues"
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["pykalshi"]
+[tool.setuptools.packages.find]
+include = ["pykalshi*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

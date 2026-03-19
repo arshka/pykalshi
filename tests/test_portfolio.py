@@ -380,8 +380,8 @@ def test_order_wait_until_terminal_executed(client, mock_response, mocker):
     order = Order(client, initial_model)
 
     # Mock time to avoid actual sleeping
-    mocker.patch("pykalshi.orders.time.sleep")
-    mock_monotonic = mocker.patch("pykalshi.orders.time.monotonic")
+    mocker.patch("pykalshi._sync.orders.time.sleep")
+    mock_monotonic = mocker.patch("pykalshi._sync.orders.time.monotonic")
     mock_monotonic.side_effect = [0.0, 0.5, 1.0]  # start, check, check
 
     # First refresh: still resting, second refresh: executed
@@ -409,7 +409,7 @@ def test_order_wait_until_terminal_already_terminal(client, mock_response, mocke
     )
     order = Order(client, initial_model)
 
-    mock_sleep = mocker.patch("pykalshi.orders.time.sleep")
+    mock_sleep = mocker.patch("pykalshi._sync.orders.time.sleep")
 
     result = order.wait_until_terminal(timeout=5.0)
 
@@ -431,8 +431,8 @@ def test_order_wait_until_terminal_timeout(client, mock_response, mocker):
     )
     order = Order(client, initial_model)
 
-    mocker.patch("pykalshi.orders.time.sleep")
-    mock_monotonic = mocker.patch("pykalshi.orders.time.monotonic")
+    mocker.patch("pykalshi._sync.orders.time.sleep")
+    mock_monotonic = mocker.patch("pykalshi._sync.orders.time.monotonic")
     # Simulate time passing: start at 0, then jump past deadline
     mock_monotonic.side_effect = [0.0, 0.5, 2.1]  # start, first check (ok), second check (past deadline)
 
