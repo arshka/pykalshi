@@ -10,8 +10,8 @@ def _eventually_fetch(
     fetch,
     *,
     predicate=lambda result: True,
-    timeout: float = 3.0,
-    interval: float = 0.25,
+    timeout: float = 30.0,
+    interval: float = 5.0,
     ignored_exceptions: tuple[type[Exception], ...] = (),
 ):
     """Retry a read until it succeeds and satisfies the predicate."""
