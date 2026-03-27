@@ -16,6 +16,10 @@
 
 The Python client for [Kalshi](https://kalshi.com) prediction markets. WebSocket streaming, automatic retries, pandas integration, and clean interfaces for building trading systems.
 
+<p align="center">
+  <img src="assets/jupyter_preview.png" alt="Jupyter notebook rich display" width="90%">
+</p>
+
 ```python
 from pykalshi import KalshiClient, Action, Side
 
