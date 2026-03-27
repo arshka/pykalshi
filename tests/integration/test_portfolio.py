@@ -148,6 +148,7 @@ class TestOrderGroups:
                     and order1.order_id in group.orders
                     and order2.order_id in group.orders
                 ),
+                ignored_exceptions=(ResourceNotFoundError,),
             )
             assert fetched.orders is not None
             assert len(fetched.orders) == 2
@@ -160,6 +161,7 @@ class TestOrderGroups:
             updated = _eventually_fetch(
                 lambda: client.portfolio.get_order_group(group_id),
                 predicate=lambda group: group.contracts_limit_fp is not None,
+                ignored_exceptions=(ResourceNotFoundError,),
             )
             assert updated.contracts_limit_fp is not None
 
@@ -586,7 +588,13 @@ class TestOrderMutations:
         # Cancel the order
         client.portfolio.cancel_order(order.order_id)
 
-        # Now wait for terminal state (should already be terminal)
-        order.wait_until_terminal(timeout=5.0)
+        # Demo API may briefly 404 after cancel due to eventual consistency.
+        terminal_order = _eventually_fetch(
+            lambda: client.portfolio.get_order(order.order_id),
+            predicate=lambda o: o.status in (OrderStatus.CANCELED, OrderStatus.EXECUTED),
+            timeout=30.0,
+            interval=2.0,
+            ignored_exceptions=(ResourceNotFoundError,),
+        )
 
-        assert order.status == OrderStatus.CANCELED
+        assert terminal_order.status == OrderStatus.CANCELED
