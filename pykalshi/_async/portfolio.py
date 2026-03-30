@@ -136,6 +136,9 @@ class AsyncPortfolio:
             action: Order action (fetched from order if not provided).
             side: Order side (fetched from order if not provided).
         """
+        if count_fp is None and yes_price_dollars is None and no_price_dollars is None:
+            raise ValueError("Must specify at least one amend field")
+
         if yes_price_dollars is not None and no_price_dollars is not None:
             raise ValueError("Specify yes_price_dollars or no_price_dollars, not both")
 
@@ -145,27 +148,23 @@ class AsyncPortfolio:
         ticker = normalize_ticker(ticker)
 
         # Fetch original order to get required fields if not provided
-        if ticker is None or action is None or side is None or count_fp is None:
+        if ticker is None or action is None or side is None:
             original = await self.get_order(order_id)
             ticker = ticker or original.ticker
             action = action or original.action
             side = side or original.side
-            if count_fp is None:
-                count_fp = original.remaining_count_fp
 
         body: dict = {
             "ticker": ticker,
             "action": action.value if isinstance(action, Action) else action,
             "side": side.value if isinstance(side, Side) else side,
-            "count_fp": count_fp,
         }
+        if count_fp is not None:
+            body["count_fp"] = count_fp
         if yes_price_dollars is not None:
             body["yes_price_dollars"] = yes_price_dollars
         if subaccount is not None:
             body["subaccount"] = subaccount
-
-        if "count_fp" not in body and "yes_price_dollars" not in body:
-            raise ValueError("Must specify at least one of count_fp, yes_price_dollars, or no_price_dollars")
 
         response = await self._client.post(f"/portfolio/orders/{order_id}/amend", body)
         model = OrderModel.model_validate(response["order"])

@@ -392,6 +392,9 @@ class AsyncKalshiClient(_BaseKalshiClient):
         end_ts: int,
         period: CandlestickPeriod = CandlestickPeriod.ONE_HOUR,
     ) -> dict[str, CandlestickResponse]:
+        if not tickers:
+            raise ValueError("tickers must not be empty")
+
         query = urlencode({
             "market_tickers": ",".join(normalize_tickers(tickers)),
             "start_ts": start_ts,

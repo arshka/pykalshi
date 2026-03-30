@@ -93,8 +93,13 @@ class AsyncFeed:
             params["market_ticker"] = market_ticker.upper()
         if market_tickers is not None:
             params["market_tickers"] = normalize_tickers(market_tickers)
-        if params not in self._active_subs:
-            self._active_subs.append(params)
+        if params in self._active_subs:
+            return
+
+        self._active_subs.append(params)
+
+        if self._connected and self._ws:
+            asyncio.create_task(self._subscribe_and_track(params))
 
     def unsubscribe(
         self,

@@ -70,21 +70,37 @@ class RateLimiter:
     _timestamps: deque = field(default_factory=deque, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _last_request: float = field(default=0.0, repr=False)
+    _tokens: float = field(default=0.0, repr=False)
+    _last_refill: float = field(default=0.0, repr=False)
 
     # Server-reported state (updated from headers)
     _server_remaining: int | None = field(default=None, repr=False)
     _server_reset_at: int | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        if self.requests_per_second <= 0:
+            raise ValueError("requests_per_second must be > 0")
         if self.burst is None:
             self.burst = max(1, int(self.requests_per_second * 2))
-        self._window_size = 1.0  # 1 second sliding window
+        self._tokens = float(self.burst)
+        self._last_refill = time.monotonic()
+
+    def _refill(self, now: float) -> None:
+        elapsed = max(0.0, now - self._last_refill)
+        self._tokens = min(float(self.burst), self._tokens + elapsed * self.requests_per_second)
+        self._last_refill = now
 
     def acquire(self, weight: int = 1) -> float:
         """Block until request is allowed. Returns wait time in seconds."""
         with self._lock:
+            if weight <= 0:
+                return 0.0
+            if weight > self.burst:
+                raise ValueError("weight cannot exceed burst capacity")
+
             now = time.monotonic()
             waited = 0.0
+            self._refill(now)
 
             # Enforce minimum spacing
             if self.min_spacing_ms > 0:
@@ -94,24 +110,7 @@ class RateLimiter:
                     time.sleep(sleep_time)
                     waited += sleep_time
                     now = time.monotonic()
-
-            # Clean old timestamps outside window
-            cutoff = now - self._window_size
-            while self._timestamps and self._timestamps[0] < cutoff:
-                self._timestamps.popleft()
-
-            # If at capacity, wait for oldest to expire
-            while len(self._timestamps) >= self.burst:
-                oldest = self._timestamps[0]
-                sleep_time = oldest + self._window_size - now
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-                    waited += sleep_time
-                    now = time.monotonic()
-                # Re-clean after sleep
-                cutoff = now - self._window_size
-                while self._timestamps and self._timestamps[0] < cutoff:
-                    self._timestamps.popleft()
+                    self._refill(now)
 
             # Check server-reported limits (be conservative)
             if self._server_remaining is not None and self._server_remaining <= 1:
@@ -122,8 +121,17 @@ class RateLimiter:
                         waited += sleep_until
                         now = time.monotonic()
                         self._server_remaining = None
+                        self._refill(now)
+
+            if self._tokens < weight:
+                sleep_time = (weight - self._tokens) / self.requests_per_second
+                time.sleep(sleep_time)
+                waited += sleep_time
+                now = time.monotonic()
+                self._refill(now)
 
             # Record this request
+            self._tokens -= weight
             for _ in range(weight):
                 self._timestamps.append(now)
             self._last_request = now
@@ -145,7 +153,7 @@ class RateLimiter:
         """Current request rate (requests in last second)."""
         with self._lock:
             now = time.monotonic()
-            cutoff = now - self._window_size
+            cutoff = now - 1.0
             while self._timestamps and self._timestamps[0] < cutoff:
                 self._timestamps.popleft()
             return len(self._timestamps)
@@ -157,6 +165,8 @@ class RateLimiter:
             self._last_request = 0.0
             self._server_remaining = None
             self._server_reset_at = None
+            self._tokens = float(self.burst)
+            self._last_refill = time.monotonic()
 
 
 @dataclass
@@ -199,19 +209,35 @@ class AsyncRateLimiter:
     _timestamps: deque = field(default_factory=deque, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     _last_request: float = field(default=0.0, repr=False)
+    _tokens: float = field(default=0.0, repr=False)
+    _last_refill: float = field(default=0.0, repr=False)
     _server_remaining: int | None = field(default=None, repr=False)
     _server_reset_at: int | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        if self.requests_per_second <= 0:
+            raise ValueError("requests_per_second must be > 0")
         if self.burst is None:
             self.burst = max(1, int(self.requests_per_second * 2))
-        self._window_size = 1.0
+        self._tokens = float(self.burst)
+        self._last_refill = time.monotonic()
+
+    def _refill(self, now: float) -> None:
+        elapsed = max(0.0, now - self._last_refill)
+        self._tokens = min(float(self.burst), self._tokens + elapsed * self.requests_per_second)
+        self._last_refill = now
 
     async def acquire(self, weight: int = 1) -> float:
         """Await until request is allowed. Returns wait time in seconds."""
         async with self._lock:
+            if weight <= 0:
+                return 0.0
+            if weight > self.burst:
+                raise ValueError("weight cannot exceed burst capacity")
+
             now = time.monotonic()
             waited = 0.0
+            self._refill(now)
 
             if self.min_spacing_ms > 0:
                 elapsed = (now - self._last_request) * 1000
@@ -220,21 +246,7 @@ class AsyncRateLimiter:
                     await asyncio.sleep(sleep_time)
                     waited += sleep_time
                     now = time.monotonic()
-
-            cutoff = now - self._window_size
-            while self._timestamps and self._timestamps[0] < cutoff:
-                self._timestamps.popleft()
-
-            while len(self._timestamps) >= self.burst:
-                oldest = self._timestamps[0]
-                sleep_time = oldest + self._window_size - now
-                if sleep_time > 0:
-                    await asyncio.sleep(sleep_time)
-                    waited += sleep_time
-                    now = time.monotonic()
-                cutoff = now - self._window_size
-                while self._timestamps and self._timestamps[0] < cutoff:
-                    self._timestamps.popleft()
+                    self._refill(now)
 
             if self._server_remaining is not None and self._server_remaining <= 1:
                 if self._server_reset_at is not None:
@@ -244,7 +256,16 @@ class AsyncRateLimiter:
                         waited += sleep_until
                         now = time.monotonic()
                         self._server_remaining = None
+                        self._refill(now)
 
+            if self._tokens < weight:
+                sleep_time = (weight - self._tokens) / self.requests_per_second
+                await asyncio.sleep(sleep_time)
+                waited += sleep_time
+                now = time.monotonic()
+                self._refill(now)
+
+            self._tokens -= weight
             for _ in range(weight):
                 self._timestamps.append(now)
             self._last_request = now
@@ -264,7 +285,7 @@ class AsyncRateLimiter:
     def current_rate(self) -> float:
         """Current request rate (requests in last second)."""
         now = time.monotonic()
-        cutoff = now - self._window_size
+        cutoff = now - 1.0
         while self._timestamps and self._timestamps[0] < cutoff:
             self._timestamps.popleft()
         return len(self._timestamps)
@@ -275,6 +296,8 @@ class AsyncRateLimiter:
         self._last_request = 0.0
         self._server_remaining = None
         self._server_reset_at = None
+        self._tokens = float(self.burst)
+        self._last_refill = time.monotonic()
 
 
 @dataclass
