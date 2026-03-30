@@ -1,6 +1,6 @@
 [project]
 name = "pykalshi"
-version = "1.0.0"
+version = "1.0.1"
 description = "A typed Python client for the Kalshi prediction markets API with WebSocket streaming, automatic retries, and ergonomic interfaces"
 readme = "README.md"
 license = "MIT"
@@ -25,7 +25,7 @@ keywords = [
     "market-data",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Financial and Insurance Industry",
     "Operating System :: OS Independent",
