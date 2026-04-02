@@ -206,8 +206,8 @@ The official SDK is auto-generated from the OpenAPI spec. pykalshi adds the infr
 
 ## Links
 
-- [Kalshi API Reference](https://trading-api.readme.io/reference)
-- [kalshi-python (official SDK)](https://github.com/Kalshi/kalshi-python)
+- [Kalshi API Reference](https://docs.kalshi.com/api-reference)
+- [kalshi-starter-code-python (official examples)](https://github.com/Kalshi/kalshi-starter-code-python)
 
 ---
 
