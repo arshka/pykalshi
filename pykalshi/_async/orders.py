@@ -105,7 +105,7 @@ class AsyncOrder:
         """
         updated = await self._client.portfolio.amend_order(
             self.order_id,
-            count_fp=count_fp,
+            count_fp=count_fp or self.remaining_count_fp,
             yes_price_dollars=yes_price_dollars,
             no_price_dollars=no_price_dollars,
             ticker=self.ticker,

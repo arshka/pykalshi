@@ -148,19 +148,20 @@ class AsyncPortfolio:
         ticker = normalize_ticker(ticker)
 
         # Fetch original order to get required fields if not provided
-        if ticker is None or action is None or side is None:
+        if ticker is None or action is None or side is None or count_fp is None:
             original = await self.get_order(order_id)
             ticker = ticker or original.ticker
             action = action or original.action
             side = side or original.side
+            if count_fp is None:
+                count_fp = original.remaining_count_fp
 
         body: dict = {
             "ticker": ticker,
             "action": action.value if isinstance(action, Action) else action,
             "side": side.value if isinstance(side, Side) else side,
+            "count_fp": count_fp,
         }
-        if count_fp is not None:
-            body["count_fp"] = count_fp
         if yes_price_dollars is not None:
             body["yes_price_dollars"] = yes_price_dollars
         if subaccount is not None:
