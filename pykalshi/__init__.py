@@ -4,7 +4,7 @@ Kalshi API Client Library
 A clean, modular interface for the Kalshi trading API.
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 import logging
 
