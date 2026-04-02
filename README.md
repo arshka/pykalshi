@@ -12,7 +12,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/pykalshi.svg)](https://pypi.org/project/pykalshi/)
 [![Tests](https://github.com/ArshKA/pykalshi/actions/workflows/test.yml/badge.svg)](https://github.com/ArshKA/pykalshi/actions/workflows/test.yml)
 [![License](https://img.shields.io/pypi/l/pykalshi.svg)](https://github.com/ArshKA/pykalshi/blob/main/LICENSE)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1cD1FJZSeEW2qThzi7IZQKtHxu3z3eWAO?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1cD1FJZSeEW2qThzi7IZQKtHxu3z3eWAO)
 
 The Python client for [Kalshi](https://kalshi.com) prediction markets. WebSocket streaming, automatic retries, pandas integration, and clean interfaces for building trading systems.
 
@@ -58,7 +58,7 @@ KALSHI_PRIVATE_KEY_PATH=/path/to/private-key.key
 
 ## Quick Start
 
-> **Interactive demo:** [`examples/demo.ipynb`](examples/demo.ipynb) or [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1cD1FJZSeEW2qThzi7IZQKtHxu3z3eWAO?usp=sharing)
+> **Interactive demo:** [`examples/demo.ipynb`](examples/demo.ipynb) or [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1cD1FJZSeEW2qThzi7IZQKtHxu3z3eWAO)
 
 ### Browse Markets
 
