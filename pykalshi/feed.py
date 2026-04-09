@@ -555,7 +555,7 @@ class Feed:
             ts = payload.get("ts")
             if ts is not None:
                 with self._metrics_lock:
-                    self._last_server_ts = ts
+                    self._last_server_ts = int(ts)
 
         handlers = self._handlers.get(channel)
         if not handlers:

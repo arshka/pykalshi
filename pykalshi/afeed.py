@@ -207,7 +207,7 @@ class AsyncFeed:
                     if isinstance(payload, dict):
                         ts = payload.get("ts")
                         if ts is not None:
-                            self._last_server_ts = ts
+                            self._last_server_ts = int(ts)
 
                     # Call registered handlers
                     for handler in self._handlers.get(channel, []):
