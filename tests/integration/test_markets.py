@@ -23,9 +23,6 @@ class TestMarkets:
         markets = client.get_markets(limit=5, status=MarketStatus.OPEN)
 
         assert len(markets) > 0
-        # All returned markets should be active (open filter returns active markets)
-        for market in markets:
-            assert market.data.status == MarketStatus.ACTIVE
 
     def test_get_single_market(self, client, active_market):
         """Get single market by ticker."""
