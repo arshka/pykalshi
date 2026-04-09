@@ -13,6 +13,7 @@ class Action(str, Enum):
 
 class OrderType(str, Enum):
     LIMIT = "limit"
+    MARKET = "market"
 
 
 class OrderStatus(str, Enum):

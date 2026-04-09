@@ -4,7 +4,7 @@ Kalshi API Client Library
 A clean, modular interface for the Kalshi trading API.
 """
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 import logging
 
@@ -16,6 +16,7 @@ from .mve import MveCollection, AsyncMveCollection
 from .orders import Order, AsyncOrder
 from .portfolio import Portfolio, AsyncPortfolio
 from .exchange import Exchange, AsyncExchange
+from .history import History, AsyncHistory
 from .api_keys import APIKeys, AsyncAPIKeys
 from .communications import Communications, AsyncCommunications
 from .feed import (
@@ -70,6 +71,10 @@ from .models import (
     AssociatedEventModel,
     RfqModel,
     QuoteModel,
+    HistoricalCutoffResponse,
+    HistoricalCandlestick,
+    HistoricalBidAsk,
+    HistoricalPrice,
 )
 from .orderbook import OrderbookManager
 from .rate_limiter import RateLimiter, NoOpRateLimiter, AsyncRateLimiter, AsyncNoOpRateLimiter
@@ -106,6 +111,8 @@ __all__ = [
     "AsyncPortfolio",
     "Exchange",
     "AsyncExchange",
+    "History",
+    "AsyncHistory",
     "APIKeys",
     "AsyncAPIKeys",
     "Communications",
@@ -152,6 +159,11 @@ __all__ = [
     "QueuePositionModel",
     "OrderGroupModel",
     "ForecastPercentileHistory",
+    # Historical Models
+    "HistoricalCutoffResponse",
+    "HistoricalCandlestick",
+    "HistoricalBidAsk",
+    "HistoricalPrice",
     # MVE & Communications Models
     "MveSelectedLeg",
     "MveCollectionModel",
