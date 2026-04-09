@@ -25,6 +25,7 @@ GENERATED_MODULES = [
     "api_keys.py",
     "communications.py",
     "mve.py",
+    "history.py",
 ]
 
 # Class renames: AsyncX -> X (applied with word boundaries)
@@ -39,6 +40,7 @@ CLASS_RENAMES = {
     "AsyncAPIKeys": "APIKeys",
     "AsyncCommunications": "Communications",
     "AsyncMveCollection": "MveCollection",
+    "AsyncHistory": "History",
     "AsyncRateLimiterProtocol": "RateLimiterProtocol",
     "AsyncFeed": "Feed",
 }

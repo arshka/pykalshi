@@ -5,6 +5,49 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from .enums import OrderStatus, Side, Action, OrderType, MarketStatus
 
 
+class HistoricalCutoffResponse(BaseModel):
+    """Boundary timestamps separating live from historical data."""
+    market_settled_ts: str
+    trades_created_ts: str
+    orders_updated_ts: str
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class HistoricalBidAsk(BaseModel):
+    """OHLC for bid/ask levels in historical candlesticks."""
+    open: str | None = None
+    high: str | None = None
+    low: str | None = None
+    close: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class HistoricalPrice(BaseModel):
+    """OHLC + mean/previous for trade prices in historical candlesticks."""
+    open: str | None = None
+    high: str | None = None
+    low: str | None = None
+    close: str | None = None
+    mean: str | None = None
+    previous: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class HistoricalCandlestick(BaseModel):
+    """A single candlestick from the historical candlesticks endpoint."""
+    end_period_ts: int
+    yes_bid: HistoricalBidAsk | None = None
+    yes_ask: HistoricalBidAsk | None = None
+    price: HistoricalPrice | None = None
+    volume: str | None = None
+    open_interest: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class MveSelectedLeg(BaseModel):
     """A single leg in a multivariate event combo."""
     event_ticker: str

@@ -22,6 +22,7 @@ from ..enums import MarketStatus, CandlestickPeriod
 from .exchange import AsyncExchange
 from .api_keys import AsyncAPIKeys
 from .communications import AsyncCommunications
+from .history import AsyncHistory
 from ..exceptions import RateLimitError
 from .._utils import normalize_ticker, normalize_tickers
 
@@ -207,6 +208,10 @@ class AsyncKalshiClient(_BaseKalshiClient):
     @cached_property
     def communications(self) -> AsyncCommunications:
         return AsyncCommunications(self)
+
+    @cached_property
+    def history(self) -> AsyncHistory:
+        return AsyncHistory(self)
 
     def feed(self) -> AsyncFeed:
         """Create a new async real-time data feed."""
